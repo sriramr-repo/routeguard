@@ -1,0 +1,150 @@
+"""
+Core logic: a simple sequential loop  Optimizer -> Critic -> Arbiter.
+
+run_swarm() is a generator of Events, so any front end (Streamlit, CLI) can
+render the agents "talking" token by token.
+
+Two interchangeable backends:
+  * ReplayBackend  - streams pre-recorded agent output from scenarios.py.
+                     No network, identical every time: use this on stage.
+  * ClaudeBackend  - calls the Claude API live with the prompts in agents.py.
+If the live backend fails mid-run, the swarm falls back to replay for the
+remaining agents automatically, so the demo never dies on stage.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from dataclasses import dataclass, field
+from typing import Iterator
+
+from agents import AGENTS, Agent, build_user_message
+
+JSON_RE = re.compile(r"<json>\s*(\{.*\})\s*</json>", re.DOTALL)
+
+
+@dataclass
+class Event:
+    type: str            # agent_start | token | agent_done | fallback | swarm_done
+    agent: str = ""
+    text: str = ""
+    data: dict = field(default_factory=dict)
+
+
+def split_output(full_text: str) -> tuple[str, dict]:
+    """Return (narration, parsed JSON). Tolerates a missing closing tag."""
+    narration = full_text.split("<json>")[0].strip()
+    m = JSON_RE.search(full_text)
+    raw = m.group(1) if m else None
+    if raw is None and "<json>" in full_text:
+        raw = full_text.split("<json>", 1)[1].replace("</json>", "")
+        raw = raw[raw.find("{"): raw.rfind("}") + 1]
+    if not raw:
+        raise ValueError("Agent returned no <json> block")
+    return narration, json.loads(raw)
+
+
+# --------------------------------------------------------------------------- backends
+
+class ReplayBackend:
+    name = "Replay (offline)"
+
+    def __init__(self, speed: float = 1.0):
+        # speed = multiplier; 1.0 ~ fast human reading pace
+        self.delay = 0.035 / max(speed, 0.05)
+
+    def stream(self, agent: Agent, scenario: dict, user_msg: str) -> Iterator[str]:
+        script = scenario["script"][agent.key]
+        text = script["narration"].strip()
+        # stream word by word, with a beat after each sentence
+        for token in re.findall(r"\S+\s*", text):
+            yield token
+            pause = self.delay * (6 if token.rstrip().endswith((".", "!", "?")) else 1)
+            time.sleep(pause)
+        yield "\n<json>\n" + json.dumps(script["json"], indent=2) + "\n</json>"
+
+
+class ClaudeBackend:
+    name = "Live (Claude API)"
+
+    def __init__(self, model: str | None = None, api_key: str | None = None):
+        import anthropic  # imported lazily so replay mode needs no SDK
+
+        self.client = anthropic.Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+        self.model = model or os.environ.get("ROUTEGUARD_MODEL", "claude-sonnet-5-5")
+
+    def stream(self, agent: Agent, scenario: dict, user_msg: str) -> Iterator[str]:
+        with self.client.messages.stream(
+            model=self.model,
+            max_tokens=1500,
+            system=agent.system_prompt,
+            messages=[{"role": "user", "content": user_msg}],
+        ) as s:
+            for text in s.text_stream:
+                yield text
+
+
+# --------------------------------------------------------------------------- the loop
+
+def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None) -> Iterator[Event]:
+    """Sequential agent loop. Each agent sees the manifest plus all earlier verdicts."""
+    fallback = fallback or ReplayBackend(speed=2.0)
+    ctx: dict[str, dict] = {}
+
+    for agent in AGENTS:
+        yield Event("agent_start", agent.key)
+        user_msg = build_user_message(agent, scenario, ctx)
+        active = backend
+        for attempt in range(2):
+            buf = ""
+            try:
+                for chunk in active.stream(agent, scenario, user_msg):
+                    buf += chunk
+                    yield Event("token", agent.key, chunk)
+                narration, data = split_output(buf)
+                break
+            except Exception as exc:  # network error, bad JSON, missing key...
+                if attempt == 1 or active is fallback:
+                    raise
+                yield Event("fallback", agent.key, f"{type(exc).__name__}: {exc}")
+                active = fallback
+                backend = fallback  # stay on replay for the rest of the run
+        ctx[agent.key] = data
+        yield Event("agent_done", agent.key, narration, data)
+
+    yield Event("swarm_done", data=ctx)
+
+
+# --------------------------------------------------------------------------- CLI
+
+def _cli() -> None:
+    import argparse
+    from scenarios import SCENARIOS
+
+    p = argparse.ArgumentParser(description="Run the RouteGuard swarm in the terminal")
+    p.add_argument("--scenario", default="red_sea", choices=list(SCENARIOS))
+    p.add_argument("--live", action="store_true", help="call the Claude API instead of replay")
+    p.add_argument("--speed", type=float, default=20.0)
+    args = p.parse_args()
+
+    backend = ClaudeBackend() if args.live else ReplayBackend(speed=args.speed)
+    scenario = SCENARIOS[args.scenario]
+    print(f"\n=== {scenario['title']} ===  [{backend.name}]\n")
+    for ev in run_swarm(scenario, backend):
+        if ev.type == "agent_start":
+            print(f"\n--- {ev.agent.upper()} ---")
+        elif ev.type == "token":
+            print(ev.text, end="", flush=True)
+        elif ev.type == "fallback":
+            print(f"\n[!] live call failed ({ev.text}); falling back to replay")
+        elif ev.type == "swarm_done":
+            a = ev.data["arbiter"]
+            print(f"\n\n>>> FINAL: {a['decision']} -> {a['final_route_id']} "
+                  f"({a['transit_days']} d, ${a['est_cost_usd']:,}, residual risk {a['residual_risk_score']})")
+
+
+if __name__ == "__main__":
+    _cli()

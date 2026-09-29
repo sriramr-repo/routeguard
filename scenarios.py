@@ -389,8 +389,8 @@ SCENARIOS = {
              "text": "Port Houston reefer terminal operating normally; pre-cooled cross-dock capacity available with 24h booking."},
         ],
         "hotspots": [
-            {"name": "Panama Canal", "lat": 9.1, "lon": -79.7, "label": "12-16 day queue (CC-01)"},
-            {"name": "Colón approach", "lat": 12.5, "lon": -77.5, "label": "Tropical storm (CC-04)"},
+            {"name": "Panama Canal", "lat": 9.1, "lon": -79.7, "label": "12-16 day queue (CC-01)", "pos": "bottom left"},
+            {"name": "Colón approach", "lat": 12.5, "lon": -77.5, "label": "Tropical storm (CC-04)", "pos": "top right"},
         ],
         "map_center": {"lat": 28, "lon": -60, "scale": 1.6},
         "script": {

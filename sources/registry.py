@@ -17,12 +17,13 @@ except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 from pathlib import Path
 
-from .base import ROOT, Bulletin, Context
+from .base import ROOT, RUN_SECRETS, Bulletin, Context
 from .carriers import DCSAScheduleSource, RouteCSVSource
 from .export_controls import ExportControlRulesSource, TradeGovCSLSource
 from .feeds import JSONFeedSource, RSSFeedSource
 from .geo import map_center
 from .sanctions import CountryEmbargoSource, SanctionsListSource
+from .similarweb import SimilarwebSource
 
 INTEL_TYPES = {
     "rss": RSSFeedSource,
@@ -31,10 +32,12 @@ INTEL_TYPES = {
     "country_embargo": CountryEmbargoSource,
     "export_rules": ExportControlRulesSource,
     "trade_gov_csl": TradeGovCSLSource,
+    "similarweb": SimilarwebSource,
 }
 ROUTE_TYPES = {"route_csv": RouteCSVSource, "dcsa": DCSAScheduleSource}
 PREFIX = {"Security": "SEC", "Sanctions": "SAN", "Export Control": "EXP", "Canal/Port": "PORT",
-          "Labor": "LAB", "Insurance": "INS", "Carrier": "CAR", "Weather": "WX", "Cargo": "CGO"}
+          "Labor": "LAB", "Insurance": "INS", "Carrier": "CAR", "Weather": "WX", "Cargo": "CGO",
+          "Counterparty": "KYC"}
 SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}
 
 
@@ -55,7 +58,17 @@ def _make(types: dict, spec: dict):
     return types[kind](**spec)
 
 
-def build_scenario(manifest: dict, config_path: str | Path = "config/sources.toml") -> tuple[dict, list[dict]]:
+def build_scenario(manifest: dict, config_path: str | Path = "config/sources.toml",
+                   secrets: dict | None = None) -> tuple[dict, list[dict]]:
+    """`secrets` ({env var name: key}) override the environment for this run only."""
+    token = RUN_SECRETS.set({k: v for k, v in (secrets or {}).items() if v})
+    try:
+        return _build(manifest, config_path)
+    finally:
+        RUN_SECRETS.reset(token)
+
+
+def _build(manifest: dict, config_path: str | Path) -> tuple[dict, list[dict]]:
     cfg = load_config(config_path)
     report: list[dict] = []
 

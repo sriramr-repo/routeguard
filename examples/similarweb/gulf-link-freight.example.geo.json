@@ -1,0 +1,10 @@
+{
+  "_note": "SAMPLE: fictional domain and figures, in the Similarweb v4 traffic-by-country response shape.",
+  "meta": {"request": {"domain": "gulf-link-freight.example", "start_date": "2026-06-01", "end_date": "2026-08-31"},
+           "status": "Success", "last_updated": "2026-09-01"},
+  "records": [
+    {"country": 364, "country_name": "Iran", "share": 0.62, "visits": 186.0, "rank": null},
+    {"country": 784, "country_name": "United Arab Emirates", "share": 0.21, "visits": 63.0, "rank": null},
+    {"country": 860, "country_name": "Uzbekistan", "share": 0.09, "visits": 27.0, "rank": null}
+  ]
+}

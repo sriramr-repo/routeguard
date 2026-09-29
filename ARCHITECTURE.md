@@ -225,6 +225,7 @@ flowchart LR
 | | `country_embargo` | Config map of ISO-2 → regime | CRITICAL if any candidate route passes through, or delivers to, a configured jurisdiction |
 | **Export-control lists** | `export_rules` | CSV rules: HS prefix and/or cargo keywords → control code, regime, licence rule, destinations | CRITICAL when a licence is required and none is on the manifest; HIGH to confirm when one is |
 | | `trade_gov_csl` | US Consolidated Screening List API (needs a free key) | Party hits across US export-control and sanctions lists |
+| **Counterparty web footprint** | `similarweb` | Similarweb v1 visits + v4 traffic-by-country (URL templates configurable), or sample JSON in the same shape | `Counterparty` bulletins (`KYC-xx`) for parties with a website: HIGH for negligible traffic or traffic concentrated in a watched country, MEDIUM when Similarweb has no data. Labelled leads for review |
 | **Canal & port authority notices** | `rss`, `json` | Same as above | `Canal/Port` bulletins |
 | **Carrier schedules & rates** | `dcsa` | DCSA Commercial Schedules point-to-point routings (`legs`, `UNLocationCode`, `transitTime`), priced from a rate-sheet CSV | Candidate routes with transit days, cost, carrier, sea/rail/truck legs |
 | | `route_csv` | Your own route library / rate sheet | Candidate routes, including the operators to screen |

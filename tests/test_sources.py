@@ -3,6 +3,7 @@
 import json
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +17,8 @@ from sources.export_controls import ExportControlRulesSource  # noqa: E402
 from sources.feeds import JSONFeedSource, RSSFeedSource  # noqa: E402
 from sources.geo import chokepoints_on_route  # noqa: E402
 from sources.sanctions import CountryEmbargoSource, SanctionsListSource, similarity  # noqa: E402
+from sources import similarweb  # noqa: E402
+from sources.similarweb import SimilarwebSource, normalize_domain, party_websites  # noqa: E402
 
 CNC = load_manifest((ROOT / "examples/manifests/cnc_tashkent.json").read_text(), "cnc.json")
 BAT = load_manifest((ROOT / "examples/manifests/batteries_rotterdam.csv").read_text(), "bat.csv")
@@ -131,6 +134,90 @@ class ExportControls(unittest.TestCase):
         self.assertEqual(b[0].severity, "MEDIUM")
 
 
+class Similarweb(unittest.TestCase):
+    WATCH = {364: "Iran"}
+
+    def src(self, **kw):
+        return SimilarwebSource("sw", sample_dir="examples/similarweb", watch_countries=self.WATCH, **kw)
+
+    def test_domains_from_manifest(self):
+        self.assertEqual(normalize_domain("https://www.Gulf-Link.example/about?x=1"), "gulf-link.example")
+        self.assertEqual({(d, w) for _, d, w in party_websites(CNC)},
+                         {("tashkent-precision.example", "manifest.consignee"),
+                          ("gulf-link-freight.example", "manifest.notify_party")})
+
+    def test_shell_forwarder_flagged_real_consignee_not(self):
+        b = self.src().fetch(Context(CNC, {}))
+        self.assertEqual(len(b), 2)
+        self.assertTrue(all(x.severity == "HIGH" and x.category == "Counterparty" for x in b))
+        self.assertTrue(all("manifest.notify_party" in x.text and "not a finding" in x.text for x in b))
+        self.assertTrue(any("62%" in x.text and "Iran" in x.text for x in b))
+
+    def test_sample_mode_skips_domains_without_sample_data(self):
+        # real domains (and parties with no website) are left to the live API, never flagged from samples
+        b = self.src().fetch(Context({"consignee": "Ghost LLC", "consignee_website": "maersk.com",
+                                      "shipper": "No Site GmbH"}, {}))
+        self.assertEqual(b, [])
+
+    def test_real_parties_manifest(self):
+        m = load_manifest((ROOT / "examples/manifests/batteries_real_parties.json").read_text(), "m.json")
+        self.assertEqual({d for _, d, _ in party_websites(m)}, {"kuehne-nagel.com", "dbschenker.com", "maersk.com"})
+        self.assertEqual(self.src().fetch(Context(m, {})), [])
+
+    def test_live_api_path(self):
+        seen = []
+
+        def fake_read(url, headers=None, ttl_s=0, **_):
+            seen.append(url)
+            if "unknown.example" in url:
+                raise similarweb.urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            if "denied.example" in url:
+                raise similarweb.urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
+            name = url.split("/website/")[1].split("/")[0]
+            kind = "visits" if "/visits" in url else "geo"
+            return (ROOT / f"examples/similarweb/{name}.{kind}.json").read_text()
+
+        orig, similarweb.read_text = similarweb.read_text, fake_read
+        try:
+            with unittest.mock.patch.dict("os.environ", {"SIMILARWEB_API_KEY": "sk-secret"}):
+                live = SimilarwebSource("sw", watch_countries=self.WATCH)
+                self.assertEqual(len(live.fetch(Context(CNC, {}))), 2)
+                self.assertTrue(all("api_key=sk-secret" in u and "api.similarweb.com" in u for u in seen))
+                gone = live.fetch(Context({"consignee": "X", "consignee_website": "unknown.example"}, {}))
+                self.assertEqual(gone[0].severity, "MEDIUM")
+                with self.assertRaises(RuntimeError) as err:
+                    live.fetch(Context({"consignee": "X", "consignee_website": "denied.example"}, {}))
+                self.assertNotIn("sk-secret", str(err.exception))
+            with unittest.mock.patch.dict("os.environ", {}, clear=True):
+                with self.assertRaises(RuntimeError):
+                    SimilarwebSource("sw").fetch(Context(CNC, {}))
+        finally:
+            similarweb.read_text = orig
+
+
+class RunSecrets(unittest.TestCase):
+    def test_pasted_key_reaches_source_for_that_run_only(self):
+        seen = []
+
+        def fake_read(url, headers=None, ttl_s=0, **_):
+            seen.append(url)
+            raise similarweb.urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+        orig, similarweb.read_text = similarweb.read_text, fake_read
+        try:
+            with unittest.mock.patch.dict("os.environ", {}, clear=True):
+                m = load_manifest((ROOT / "examples/manifests/batteries_real_parties.json").read_text(), "m.json")
+                _, report = build_scenario(m, "config/sources.toml", secrets={"SIMILARWEB_API_KEY": "pasted"})
+                live = [r for r in report if r["source"] == "Party web footprint - Similarweb API"]
+                self.assertEqual(live[0]["status"], "ok")
+                self.assertTrue(seen and all("api_key=pasted" in u for u in seen))
+                _, report = build_scenario(m, "config/sources.toml")  # next run: no key
+                live = [r for r in report if r["source"] == "Party web footprint - Similarweb API"]
+                self.assertIn("no API key", live[0]["status"])
+        finally:
+            similarweb.read_text = orig
+
+
 class EndToEnd(unittest.TestCase):
     def test_build_cnc(self):
         sc, report = build_scenario(CNC, "config/sources.toml")
@@ -144,6 +231,8 @@ class EndToEnd(unittest.TestCase):
         msg = build_user_message(AGENTS[1], sc, {"optimizer": {"route_id": "GULF_IRAN"}})
         self.assertIn("INTELLIGENCE FEED", msg)
         self.assertIn("SAN-01", msg)
+        self.assertIn("KYC-01", msg)
+        self.assertTrue(any(r["source"].startswith("Party web footprint") and r["status"] == "ok" for r in report))
 
     def test_build_batteries_merges_route_sources(self):
         sc, _ = build_scenario(BAT, "config/sources.toml")

@@ -73,7 +73,8 @@ intelligence analyst. Your job is to BREAK the Optimizer's plan.
 You receive the manifest, the Optimizer's proposal and an intelligence feed. Aggressively hunt for
 every way this route fails: attacks or security incidents on the lane, war-risk insurance premiums
 or exclusions, sanctions and embargo exposure (including transshipment hubs and end-user red flags),
-export controls on the cargo itself, strikes and port congestion, canal restrictions, and
+export controls on the cargo itself, strikes and port congestion, canal restrictions,
+counterparty red flags (shell or front-company indicators among the shipment's parties), and
 cargo-specific risks (reefer power, high-value theft, shock sensitivity).
 
 Rules:
@@ -89,7 +90,7 @@ JSON schema:
   "flags": [
     {{
       "severity": "CRITICAL" | "HIGH" | "MEDIUM",
-      "category": "Security" | "Insurance" | "Sanctions" | "Export Control" | "Labor" | "Canal/Port" | "Cargo",
+      "category": "Security" | "Insurance" | "Sanctions" | "Export Control" | "Labor" | "Canal/Port" | "Cargo" | "Counterparty",
       "title": "<max 8 words>",
       "detail": "<one or two sentences, quantified>",
       "evidence": "<bulletin id(s) or manifest field>"

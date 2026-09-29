@@ -1,0 +1,11 @@
+{
+  "_note": "SAMPLE: fictional domain and figures, in the Similarweb v1 visits response shape.",
+  "meta": {"request": {"granularity": "Monthly", "domain": "tashkent-precision.example", "country": "world",
+                       "start_date": "2026-06-01", "end_date": "2026-08-31"},
+           "status": "Success", "last_updated": "2026-09-01"},
+  "visits": [
+    {"date": "2026-06-01", "visits": 14820.0},
+    {"date": "2026-07-01", "visits": 15930.0},
+    {"date": "2026-08-01", "visits": 16240.0}
+  ]
+}

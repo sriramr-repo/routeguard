@@ -8,6 +8,7 @@ new source means writing one adapter; the agents don't change.
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import json
 import os
@@ -19,7 +20,7 @@ from typing import Any, Protocol
 
 SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM")
 CATEGORIES = ("Security", "Sanctions", "Export Control", "Canal/Port", "Labor",
-              "Insurance", "Carrier", "Weather", "Cargo")
+              "Insurance", "Carrier", "Weather", "Cargo", "Counterparty")
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = ROOT / ".cache"
@@ -87,9 +88,17 @@ def read_text(location: str, headers: dict | None = None, ttl_s: int = 900,
     return p.read_text(encoding="utf-8-sig", errors="replace")
 
 
+# Per-run keys (e.g. pasted into the app sidebar). A context variable, not os.environ, so a
+# key one user pastes never leaks into another user's session on a shared server.
+RUN_SECRETS: contextvars.ContextVar[dict] = contextvars.ContextVar("RUN_SECRETS", default={})
+
+
 def secret(env_name: str | None) -> str | None:
-    """Look up an API key by env-var name (Streamlit secrets are exported to env by app.py)."""
-    return os.environ.get(env_name) if env_name else None
+    """Look up an API key by env-var name: a per-run key first, then the environment
+    (Streamlit secrets are exported to env by app.py)."""
+    if not env_name:
+        return None
+    return RUN_SECRETS.get().get(env_name) or os.environ.get(env_name)
 
 
 def dig(obj: Any, path: str, default=None):

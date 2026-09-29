@@ -76,6 +76,26 @@ type = "export_rules"
 name = "Export-control classification rules (sample)"
 url = "examples/export_control_rules.csv"
 
+# ---------------------------------------------------------------- counterparty web footprint
+# Similarweb traffic for each party's website (manifest `<party>_website` fields).
+# Low traffic or traffic concentrated in a sanctioned country is a due-diligence lead.
+[[intel]]
+type = "similarweb"
+name = "Party web footprint - Similarweb (sample)"
+sample_dir = "examples/similarweb"
+min_monthly_visits = 1000
+watch_share = 0.3
+watch_countries = { 364 = "Iran", 408 = "North Korea", 192 = "Cuba", 760 = "Syria" }
+
+[[intel]]
+type = "similarweb"
+name = "Party web footprint - Similarweb API"
+api_key_env = "SIMILARWEB_API_KEY"
+min_monthly_visits = 1000
+watch_share = 0.3
+watch_countries = { 364 = "Iran", 408 = "North Korea", 192 = "Cuba", 760 = "Syria" }
+enabled = true              # set true once SIMILARWEB_API_KEY is configured
+
 [[intel]]
 type = "trade_gov_csl"
 name = "US Consolidated Screening List (trade.gov API)"

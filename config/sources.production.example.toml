@@ -55,6 +55,16 @@ type = "trade_gov_csl"
 name = "US Consolidated Screening List"
 api_key_env = "TRADE_GOV_API_KEY"
 
+# Counterparty web footprint (paid Similarweb API). Parties need `<party>_website` in the
+# manifest. If your key is on a newer API version, override `visits_url` / `geo_url`.
+[[intel]]
+type = "similarweb"
+name = "Party web footprint - Similarweb API"
+api_key_env = "SIMILARWEB_API_KEY"
+min_monthly_visits = 1000
+watch_share = 0.3
+watch_countries = { 364 = "Iran", 408 = "North Korea", 192 = "Cuba", 760 = "Syria", 643 = "Russia", 112 = "Belarus" }
+
 # Maritime security advisories: any RSS/Atom or JSON publisher you subscribe to
 # (e.g. UKMTO, MARAD MSCI, JMIC, IMB Piracy Reporting Centre, a commercial risk feed).
 [[intel]]

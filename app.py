@@ -6,6 +6,7 @@ RouteGuard - live Streamlit view of the three-agent routing swarm.
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import html
 import os
@@ -24,6 +25,7 @@ SOURCES_CONFIG = os.environ.get("ROUTEGUARD_SOURCES", "config/sources.toml")
 SAMPLE_MANIFESTS = {
     "Sample: CNC machines, Hamburg → Tashkent": "examples/manifests/cnc_tashkent.json",
     "Sample: EV batteries, Shanghai → Rotterdam": "examples/manifests/batteries_rotterdam.csv",
+    "Sample: EV batteries with real forwarders (Similarweb)": "examples/manifests/batteries_real_parties.json",
 }
 
 st.set_page_config(page_title="RouteGuard", page_icon="🛰️", layout="wide")
@@ -100,9 +102,11 @@ except Exception:
 
 
 @st.cache_data(ttl=900, show_spinner="Ingesting connected sources…")
-def ingest(manifest_text: str, filename: str, config_path: str, config_mtime: float):
+def ingest(manifest_text: str, filename: str, config_path: str, config_mtime: float,
+           key_fingerprint: str, _secrets: dict):
+    # _secrets is not hashed (leading underscore); key_fingerprint keys the cache per key instead
     manifest = load_manifest(manifest_text, filename)
-    return build_scenario(manifest, config_path)
+    return build_scenario(manifest, config_path, secrets=_secrets)
 
 
 # ------------------------------------------------------------------ helpers
@@ -449,6 +453,10 @@ with st.sidebar:
         sample = st.selectbox("…or use a sample manifest", list(SAMPLE_MANIFESTS), disabled=up is not None)
         engine = "Live (Claude API)"
         st.caption("Connected-data runs always use the Live engine.")
+        sw_key = st.text_input("Similarweb API key (optional)", type="password", value="",
+                               placeholder="paste to vet party websites (session only)",
+                               help="Checks the web footprint of each party website in the manifest. "
+                                    "Kept only in your session, never stored.").strip().strip('"').strip("'")
     if engine.startswith("Live"):
         typed = st.text_input("Anthropic API key", type="password", value="",
                               placeholder="paste your key (kept only in your session)")
@@ -491,7 +499,9 @@ if connected:
         man_text, man_name = open(path, encoding="utf-8").read(), path
     try:
         cfg_mtime = os.path.getmtime(SOURCES_CONFIG)
-        scenario, source_report = ingest(man_text, man_name, SOURCES_CONFIG, cfg_mtime)
+        run_keys = {"SIMILARWEB_API_KEY": sw_key} if sw_key else {}
+        fp = hashlib.sha256(sw_key.encode()).hexdigest()[:16] if sw_key else ""
+        scenario, source_report = ingest(man_text, man_name, SOURCES_CONFIG, cfg_mtime, fp, run_keys)
     except Exception as exc:
         st.error(f"Could not build this shipment: {exc}")
         st.stop()

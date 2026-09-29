@@ -109,6 +109,7 @@ The agents are source-agnostic. Every feed, list and API is converted by an adap
 | Maritime security advisories | `rss`, `json` | RSS 2.0, Atom, any JSON API via field mapping |
 | Sanctions lists (OFAC, EU, UK) | `sanctions_list`, `country_embargo` | OFAC `SDN.CSV`, EU Financial Sanctions Files CSV, UK consolidated CSV, generic CSV; ISO-2 jurisdiction map |
 | Export-control lists | `export_rules`, `trade_gov_csl` | HS-code/keyword rule CSV (your EU dual-use / US CCL mapping); US Consolidated Screening List API |
+| Counterparty web footprint | `similarweb` | Similarweb REST API (monthly visits + traffic by country) for each party website in the manifest (`consignee_website`, `notify_party_website`...) |
 | Canal & port authority notices | `rss`, `json` | RSS 2.0, Atom, JSON |
 | Carrier schedules & rates | `dcsa`, `route_csv` | DCSA Commercial Schedules point-to-point routings + rate sheet; your own route-library CSV |
 | Shipper manifest | `load_manifest()` | JSON or CSV from a TMS/ERP, with common field aliases (`port_of_loading`, `commodity`, `invoice_value`...) |
@@ -192,7 +193,7 @@ They're tested (`tests/test_sources.py`, 18 tests) against sample files in each 
 Relevance is geographic and deterministic. Each candidate route is expanded along a sea-lane graph, and a feed item is kept only if it mentions a port or chokepoint on one of the routes (for example, a Gulf of Guinea piracy report is dropped for a Shanghai → Rotterdam shipment). Items are also age-limited, deduped, ranked by severity and capped.
 
 **Is sanctions screening done by the LLM?**
-No. List screening is deterministic: normalized name matching of every party against the actual list entries, plus a jurisdiction check on every place a route passes through. The model only reasons about the hits. For production compliance, your screening provider stays the source of truth; RouteGuard adds the routing decision on top.
+No. List screening is deterministic: normalized name matching of every party against the actual list entries, plus a jurisdiction check on every place a route passes through. The model only reasons about the hits. The counterparty check works the same way: when a party lists a website, RouteGuard looks up its Similarweb traffic, and fixed thresholds decide the flag (under ~1,000 visits a month, or most traffic from a sanctioned country). A new shell company won't be on any list yet, so this is an extra signal, and it's labelled a lead for review, not a finding. For production compliance, your screening provider stays the source of truth; RouteGuard adds the routing decision on top.
 
 ### Reliability & safety
 

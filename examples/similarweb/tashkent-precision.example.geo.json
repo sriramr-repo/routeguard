@@ -1,0 +1,10 @@
+{
+  "_note": "SAMPLE: fictional domain and figures, in the Similarweb v4 traffic-by-country response shape.",
+  "meta": {"request": {"domain": "tashkent-precision.example", "start_date": "2026-06-01", "end_date": "2026-08-31"},
+           "status": "Success", "last_updated": "2026-09-01"},
+  "records": [
+    {"country": 860, "country_name": "Uzbekistan", "share": 0.71, "visits": 11290.0, "rank": 2140},
+    {"country": 398, "country_name": "Kazakhstan", "share": 0.12, "visits": 1910.0, "rank": null},
+    {"country": 643, "country_name": "Russia", "share": 0.08, "visits": 1270.0, "rank": null}
+  ]
+}

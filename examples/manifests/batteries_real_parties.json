@@ -1,0 +1,20 @@
+{
+  "shipment_id": "BK-80577",
+  "shipper": "Yangtze Cell Technology Co Ltd (SAMPLE)",
+  "consignee": "Rhine E-Mobility BV (SAMPLE)",
+  "forwarder": "Kuehne+Nagel",
+  "forwarder_website": "kuehne-nagel.com",
+  "notify_party": "DB Schenker",
+  "notify_party_website": "dbschenker.com",
+  "carrier": "Maersk",
+  "websites": {"Maersk": "maersk.com"},
+  "origin": "Shanghai",
+  "destination": "Rotterdam",
+  "cargo": "Lithium-ion battery modules for EV assembly (UN3480 Class 9)",
+  "hs_code": "8507.60",
+  "containers": "8 x 40' HC",
+  "declared_value_usd": 19500000,
+  "incoterm": "CIF Rotterdam",
+  "deadline_days": 40,
+  "insurance": "All-risks cargo; war & strikes subject to listed-area exclusions"
+}

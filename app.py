@@ -6,6 +6,7 @@ RouteGuard - live Streamlit view of the three-agent routing swarm.
 
 from __future__ import annotations
 
+import hmac
 import html
 import os
 import time
@@ -81,7 +82,8 @@ h1.rg-title {font-size: 2.1rem; margin: 0; letter-spacing: -0.02em;}
 
 try:
     for _k, _v in st.secrets.items():
-        if isinstance(_v, str):
+        # connector keys (e.g. TRADE_GOV_API_KEY) go to env; the Anthropic key never does
+        if isinstance(_v, str) and "anthropic" not in _k.lower() and not _v.strip().startswith("sk-ant-"):
             os.environ.setdefault(_k, _v)
 except Exception:
     pass
@@ -105,9 +107,25 @@ def money(v) -> str:
     return f"${v / 1_000_000:.1f}M" if v >= 1_000_000 else f"${v / 1000:,.0f}k"
 
 
+def _secrets_present() -> bool:
+    try:
+        return len(st.secrets) > 0
+    except Exception:
+        return False
+
+
+def owner_passcode() -> str | None:
+    try:
+        if "ROUTEGUARD_PASSCODE" in st.secrets:
+            return str(st.secrets["ROUTEGUARD_PASSCODE"])
+    except Exception:
+        pass
+    return os.environ.get("ROUTEGUARD_PASSCODE")
+
+
 def get_api_key() -> str | None:
-    """Find the Anthropic key in Streamlit secrets (any casing, top level or inside a section)
-    or the environment. Never displayed or logged."""
+    """Server-side Anthropic key from Streamlit secrets (any casing, top level or inside a section)
+    or the environment. Never displayed or logged. Callers must gate it (see sidebar)."""
     def clean(v: str) -> str:
         return v.strip().strip('"').strip("'").strip()
 
@@ -310,7 +328,8 @@ with st.sidebar:
                          help="Connected mode loads a shipper manifest and pulls intel from the sources "
                               f"configured in {SOURCES_CONFIG}.")
     connected = data_mode.startswith("Connected")
-    api_key = get_api_key()
+    server_key = get_api_key()
+    api_key = None
     if not connected:
         scen_key = st.radio("Scenario", list(SCENARIOS), format_func=lambda k: SCENARIOS[k]["title"], key="scenario")
         engine = st.radio(
@@ -324,13 +343,30 @@ with st.sidebar:
         st.caption("Connected-data runs always use the Live engine.")
     if engine.startswith("Live"):
         typed = st.text_input("Anthropic API key", type="password", value="",
-                              placeholder="set via secrets or paste here")
-        api_key = typed or api_key
+                              placeholder="paste your key (kept only in your session)")
+        # A server-side key (Secrets / env) is private to the owner: it is only used after the
+        # owner passcode is entered. On a hosted app with no passcode configured it is never used.
+        unlocked = False
+        if server_key and not typed:
+            code = owner_passcode()
+            if code:
+                entered = st.text_input("Owner passcode", type="password",
+                                        help="Unlocks the owner's saved API key for this session only.")
+                unlocked = bool(entered) and hmac.compare_digest(entered.encode(), code.encode())
+                if entered and not unlocked:
+                    st.error("Wrong passcode.")
+            elif not _secrets_present():
+                unlocked = True  # running locally with an env var: the machine owner is the user
+            else:
+                st.caption("A saved key exists but is locked: set ROUTEGUARD_PASSCODE in Secrets to use it.")
+        api_key = typed or (server_key if unlocked else None)
         model = st.text_input("Model", value=os.environ.get("ROUTEGUARD_MODEL", "claude-sonnet-5-5"))
-        if not typed and st.session_state.get("key_diag"):
-            st.caption(f"🔑 {st.session_state['key_diag']}")
+        if unlocked and st.session_state.get("key_diag"):
+            st.caption(f"🔑 owner key unlocked · {st.session_state['key_diag']}")
+        elif typed:
+            st.caption("🔑 using the key you pasted (this session only, never stored)")
         if not api_key:
-            st.warning("No API key found." + ("" if connected else " The run will fall back to replay."))
+            st.warning("No API key for this session." + ("" if connected else " Live runs will fall back to replay."))
     else:
         model = None
     speed = st.slider("Stream speed", 0.5, 4.0, 1.0, 0.25, help="Replay typing speed")

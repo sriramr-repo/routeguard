@@ -71,9 +71,9 @@ streamlit run app.py
 ```
 
 Live mode (and connected-data runs) need an Anthropic API key, provided in any one of these ways:
-- an environment variable: `export ANTHROPIC_API_KEY=sk-ant-...`
-- the file `.streamlit/secrets.toml`, containing `ANTHROPIC_API_KEY = "sk-ant-..."`
-- the sidebar, pasted in at runtime
+- **the sidebar**, pasted in at runtime: kept only in your browser session;
+- locally, an environment variable: `export ANTHROPIC_API_KEY=sk-ant-...`;
+- on a hosted app, Streamlit Secrets `ANTHROPIC_API_KEY = "sk-ant-..."` **plus** `ROUTEGUARD_PASSCODE = "..."`. The saved key stays locked until the owner enters the passcode, so visitors can't spend your credits.
 
 To change the model, set `ROUTEGUARD_MODEL` or edit it in the sidebar. The default is `claude-sonnet-5-5`.
 
@@ -187,6 +187,9 @@ No. List screening is deterministic: normalized name matching of every party aga
 
 **What happens if the API or network fails during the demo?**
 In the curated scenarios, the live engine falls back to replay automatically for the rest of that run, with a small on-screen notice. Replay mode needs no network after the page loads. In connected mode, a failing *source* is skipped and reported; a failing *model call* stops the run with a clear error, because there's no script to fall back to.
+
+**Who can use the API key on the public app?**
+Only its owner. A key pasted into the sidebar lives only in that browser session and is never stored. A key saved in Streamlit Secrets is **locked**: it's used only after the owner enters the passcode set as `ROUTEGUARD_PASSCODE` in Secrets. With no passcode configured, a saved key is never used on the hosted app. Everyone else can watch the Replay demo, or paste their own key.
 
 **Is the Arbiter's decision final?**
 Not in production. The decision goes to a human logistics or compliance approver before anything is booked, and every input, verdict and cited piece of evidence goes into an audit log. RouteGuard is decision support, not legal advice.

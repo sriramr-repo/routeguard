@@ -92,8 +92,8 @@ SCENARIOS = {
              "text": "High-value electronics theft at transshipment hubs up 28% YoY; Colombo transshipment yard flagged for seal-tamper incidents."},
         ],
         "hotspots": [
-            {"name": "Bab el-Mandeb", "lat": 12.6, "lon": 43.3, "label": "Drone attacks (RS-01)"},
-            {"name": "Suez Canal", "lat": 30.5, "lon": 32.35, "label": "Tug & pilot strike (RS-04)"},
+            {"name": "Bab el-Mandeb", "lat": 12.6, "lon": 43.3, "label": "Drone attacks (RS-01)", "pos": "bottom left"},
+            {"name": "Suez Canal", "lat": 30.5, "lon": 32.35, "label": "Tug & pilot strike (RS-04)", "pos": "top right"},
             {"name": "Colombo", "lat": 6.95, "lon": 79.85, "label": "Seal tampering (RS-06)"},
         ],
         "map_center": {"lat": 15, "lon": 60, "scale": 1.3},
@@ -249,9 +249,9 @@ SCENARIOS = {
              "text": "Red Sea threat level SEVERE; carriers routing Europe-Gulf cargo via the Cape, adding 10-12 days."},
         ],
         "hotspots": [
-            {"name": "Bandar Abbas", "lat": 27.15, "lon": 56.2, "label": "Sanctioned terminal (EM-01)"},
-            {"name": "Dubai", "lat": 25.2, "lon": 55.3, "label": "Flagged forwarder (EM-03)"},
-            {"name": "Bab el-Mandeb", "lat": 12.6, "lon": 43.3, "label": "SEVERE threat (EM-06)"},
+            {"name": "Bandar Abbas", "lat": 27.15, "lon": 56.2, "label": "Sanctioned terminal (EM-01)", "pos": "top right"},
+            {"name": "Dubai", "lat": 25.2, "lon": 55.3, "label": "Flagged forwarder (EM-03)", "pos": "bottom right"},
+            {"name": "Bab el-Mandeb", "lat": 12.6, "lon": 43.3, "label": "SEVERE threat (EM-06)", "pos": "bottom left"},
         ],
         "map_center": {"lat": 35, "lon": 38, "scale": 2.0},
         "script": {

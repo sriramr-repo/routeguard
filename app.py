@@ -177,7 +177,7 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
         fig.add_trace(go.Scattergeo(
             lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs], mode="markers+text",
             marker=dict(size=13, color="#ef4444", symbol="x", line=dict(width=1, color="white")),
-            text=[f"⚠ {h['label']}" for h in hs], textposition="bottom right",
+            text=[f"⚠ {h['label']}" for h in hs], textposition=[h.get("pos", "bottom right") for h in hs],
             textfont=dict(color="#fca5a5", size=12), name="Risk hotspots", hoverinfo="text"))
     if stage >= 3:
         final = ctx.get("arbiter", {}).get("final_route_id")

@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from agents import AGENTS, VERDICT_SCHEMAS, Agent, build_user_message
+from agents import AGENTS, ARBITER, CRITIC, VERDICT_SCHEMAS, Agent, build_user_message
 
 JSON_RE = re.compile(r"<json>\s*(\{.*\})\s*</json>", re.DOTALL)
 
@@ -114,12 +114,14 @@ class ClaudeBackend:
 
 # --------------------------------------------------------------------------- the loop
 
-def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None) -> Iterator[Event]:
-    """Sequential agent loop. Each agent sees the manifest plus all earlier verdicts."""
+def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None,
+              agents: list[Agent] | None = None, ctx: dict | None = None) -> Iterator[Event]:
+    """Sequential agent loop. Each agent sees the manifest plus all earlier verdicts.
+    `agents` and a seeded `ctx` let a re-check resume part-way down the chain."""
     fallback = fallback or ReplayBackend(speed=2.0)
-    ctx: dict[str, dict] = {}
+    ctx = dict(ctx or {})
 
-    for agent in AGENTS:
+    for agent in agents or AGENTS:
         yield Event("agent_start", agent.key)
         user_msg = build_user_message(agent, scenario, ctx)
         active = backend
@@ -150,6 +152,56 @@ def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None) ->
     yield Event("swarm_done", data=ctx)
 
 
+# --------------------------------------------------------------------------- re-check
+
+def recheck_scenario(scenario: dict, bulletin: dict, hotspot: dict | None = None,
+                     script: dict | None = None) -> dict:
+    """The scenario as it stands after a breaking bulletin: the bulletin (marked new) leads the
+    intel feed, its hotspot joins the map, and `script` replaces the replay script."""
+    def old(items):  # earlier breaking items stay in the feed but are no longer "new"
+        return [{k: v for k, v in i.items() if k != "new"} for i in items]
+
+    b = {"time": "BREAKING", **bulletin, "new": True}
+    return {**scenario, "intel": [b, *old(scenario["intel"])],
+            "hotspots": [*old(scenario["hotspots"]), *([{**hotspot, "new": True}] if hotspot else [])],
+            "script": script}
+
+
+def run_recheck(scenario: dict, backend, prior_ctx: dict, fallback: ReplayBackend | None = None) -> Iterator[Event]:
+    """Re-check a booked plan after `recheck_scenario`: the Critic attacks the previous Arbiter
+    decision and the Arbiter confirms or changes it. The Optimizer is blind to intel, so it
+    would only propose the same route again and does not run."""
+    return run_swarm(scenario, backend, fallback, agents=[CRITIC, ARBITER],
+                     ctx={"current_plan": prior_ctx["arbiter"]})
+
+
+# keyword -> category; each regex matches at a word start so "port" doesn't fire on "report"
+_CATEGORY_RULES = [
+    ("Sanctions", r"\b(sanction|designat|embargo|asset freeze)"),
+    ("Export Control", r"\b(export|licen[cs]e|dual-use)"),
+    ("Security", r"\b(attack|missile|drone|pira|hijack|seiz|boarding|war\b)"),
+    ("Labor", r"\b(strike|stoppage|union|walkout)"),
+    ("Weather", r"\b(storm|hurricane|typhoon|cyclone|flood|fog|gale|wind)"),
+    ("Insurance", r"\b(insur|premium|underwrit|cover\b)"),
+    ("Canal/Port", r"\b(canal|ports?\b|terminal|berth|queue|congestion|ferry|draft)"),
+]
+
+
+def make_breaking_bulletin(text: str, scenario: dict, bid: str = "NEW-01") -> tuple[dict, dict | None]:
+    """Turn free text into a citable bulletin, pinned to the first port or chokepoint it names
+    on any candidate route (deterministic, the same matching the connected sources use)."""
+    from sources.base import guess_severity
+    from sources.geo import match_location, places_for_routes
+
+    t = text.strip().lower()
+    category = next((c for c, rx in _CATEGORY_RULES if re.search(rx, t)), "Carrier")
+    bulletin = {"id": bid, "source": "Breaking news (injected)", "category": category,
+                "severity": guess_severity(text, default="HIGH"), "text": text.strip()}
+    hit = match_location(text, places_for_routes(scenario["routes"]))
+    hotspot = {"name": hit[0], "lat": hit[1], "lon": hit[2], "label": f"{hit[0]}: breaking ({bid})"} if hit else None
+    return bulletin, hotspot
+
+
 # --------------------------------------------------------------------------- CLI
 
 def _cli() -> None:
@@ -163,6 +215,8 @@ def _cli() -> None:
     p.add_argument("--ingest-only", action="store_true", help="with --manifest: print ingested data and exit")
     p.add_argument("--live", action="store_true", help="call the Claude API instead of replay")
     p.add_argument("--speed", type=float, default=20.0)
+    p.add_argument("--twist", action="store_true",
+                   help="after the decision, inject the scenario's breaking-news twist and re-check")
     args = p.parse_args()
 
     if args.manifest:
@@ -181,8 +235,22 @@ def _cli() -> None:
     else:
         scenario = SCENARIOS[args.scenario]
     backend = ClaudeBackend() if args.live else ReplayBackend(speed=args.speed)
+    fallback = ReplayBackend(speed=args.speed)
     print(f"\n=== {scenario['title']} ===  [{backend.name}]\n")
-    for ev in run_swarm(scenario, backend):
+    ctx = _print_run(run_swarm(scenario, backend, fallback), "FINAL")
+    twists = scenario.get("twists") or []
+    if args.twist and twists:
+        t = twists[0]
+        print(f"\n\n⚡ BREAKING [{t['bulletin']['id']}]: {t['bulletin']['text']}")
+        rescen = recheck_scenario(scenario, t["bulletin"], t.get("hotspot"), t.get("script"))
+        _print_run(run_recheck(rescen, backend, ctx, fallback), "UPDATED")
+    elif args.twist:
+        print("\n[!] this scenario has no breaking-news twist")
+
+
+def _print_run(events: Iterator[Event], label: str) -> dict:
+    ctx: dict = {}
+    for ev in events:
         if ev.type == "agent_start":
             print(f"\n--- {ev.agent.upper()} ---")
         elif ev.type == "token":
@@ -190,9 +258,11 @@ def _cli() -> None:
         elif ev.type == "fallback":
             print(f"\n[!] live call failed ({ev.text}); falling back to replay")
         elif ev.type == "swarm_done":
-            a = ev.data["arbiter"]
-            print(f"\n\n>>> FINAL: {a['decision']} -> {a['final_route_id']} "
+            ctx = ev.data
+            a = ctx["arbiter"]
+            print(f"\n\n>>> {label}: {a['decision']} -> {a['final_route_id']} "
                   f"({a['transit_days']} d, ${a['est_cost_usd']:,}, residual risk {a['residual_risk_score']})")
+    return ctx
 
 
 if __name__ == "__main__":

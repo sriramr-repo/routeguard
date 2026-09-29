@@ -460,3 +460,171 @@ SCENARIOS = {
         },
     },
 }
+
+
+# ---------------------------------------------------------------- breaking-news twists
+# One pre-recorded "breaking news" event per scenario, aimed at the route the Arbiter chose.
+# Injecting it re-runs the Critic and the Arbiter against the booked plan (pipeline.run_recheck).
+# Like the rest of this file, the events are SIMULATED.
+
+SCENARIOS["red_sea"]["twists"] = [{
+    "id": "cape_town_strike",
+    "label": "Strike and gales at Cape Town terminal",
+    "bulletin": {"id": "NEW-01", "source": "Port labour monitor", "category": "Labor", "severity": "HIGH",
+                 "text": "Cape Town container terminal: dockworkers begin a 5-day strike on Monday over wages, and south-easterly gales are already forcing berth closures. Carriers are warned to expect omitted calls."},
+    "hotspot": {"name": "Cape Town", "lat": -33.9, "lon": 18.43, "label": "Terminal strike (NEW-01)", "pos": "top left"},
+    "script": {
+        "critic": {
+            "narration": (
+                "New problem on the booked route. The Cape express has exactly one call between Singapore and Rotterdam, and it's Cape Town. "
+                "Dockworkers there start a five-day strike on Monday, and gales are already shutting berths (NEW-01). "
+                "If our ship waits it out at anchorage, 30 days becomes 35: three days past the 32-day deadline. "
+                "The express service also plans to bunker at Cape Town, so an omitted call leaves a fuel gap. "
+                "What hasn't changed: nothing new touches security, sanctions or insurance on this lane, and the Red Sea is still off the table (RS-01, RS-03). "
+                "Verdict: CONDITIONAL. Fix the Cape Town call or we're late."
+            ),
+            "json": {
+                "verdict": "CONDITIONAL", "risk_score": 38,
+                "flags": [
+                    {"severity": "HIGH", "category": "Labor", "title": "Cape Town strike could add five days",
+                     "detail": "A 5-day stoppage plus gale closures: waiting at anchorage turns 30 days into 35, 3 days late.",
+                     "evidence": "NEW-01, manifest.deadline_days"},
+                    {"severity": "MEDIUM", "category": "Canal/Port", "title": "Planned bunkering call at risk",
+                     "detail": "The express service refuels at Cape Town; an omitted call needs another fuel stop.",
+                     "evidence": "NEW-01, route notes"},
+                ],
+            },
+        },
+        "arbiter": {
+            "narration": (
+                "This is a port-call problem, not a route problem. "
+                "None of our cargo discharges at Cape Town. The ship only stops there for fuel, so we tell the carrier to skip the call. "
+                "It bunkers at Port Louis in Mauritius instead: about one extra day and roughly $18,000. "
+                "That lands us in 31 days, still inside the 32-day window. "
+                "Container six is already on the air-freight plan, so the line-critical lot isn't affected. "
+                "Switching back to Suez would bring back the drone threat and the uninsured $48 million, so that's not an option. "
+                "Decision: proceed on the Cape express, with the Cape Town call dropped."
+            ),
+            "json": {
+                "decision": "PROCEED", "final_route_id": "CAPE_EXPRESS", "transit_days": 31,
+                "est_cost_usd": 620_000, "residual_risk_score": 20, "meets_deadline": True,
+                "mitigations": [
+                    "Instruct the carrier to omit the Cape Town call (no cargo discharges there)",
+                    "Bunker at Port Louis instead: +1 day, ~$18,000",
+                    "Container #6 stays on the air-freight plan: unaffected",
+                    "Re-check if the strike spreads to other South African ports",
+                ],
+                "summary": "Hold course on the Cape express: skip the struck Cape Town call and refuel at Port Louis. 31 days and $620k, still inside the 32-day window.",
+            },
+        },
+    },
+}]
+
+SCENARIOS["embargo"]["twists"] = [{
+    "id": "caspian_ferry_suspended",
+    "label": "Caspian ferry suspended for 10 days",
+    "bulletin": {"id": "NEW-01", "source": "Corridor monitor", "category": "Canal/Port", "severity": "HIGH",
+                 "text": "Caspian ferry services Alat (Baku) to Aktau suspended for about 10 days after a storm damaged the Aktau ferry berth. Operators expect a 4-5 day backlog once sailings resume."},
+    "hotspot": {"name": "Caspian ferry", "lat": 41.8, "lon": 50.3, "label": "Ferry suspended (NEW-01)", "pos": "top right"},
+    "script": {
+        "critic": {
+            "narration": (
+                "The booked route's weakest link just broke. "
+                "The Alat to Aktau ferry is suspended for about ten days after storm damage at Aktau, with a four-to-five-day backlog after that (NEW-01). "
+                "That's on top of the two-to-three-day waits we already priced in (EM-05). "
+                "If our boxes were at Alat today, 36 days becomes 50 or 51, five or six days past the 45-day deadline. "
+                "And the fallbacks are poor: the China landbridge takes 49 days and sails through the Red Sea at a SEVERE threat level (EM-06), while the Gulf route is illegal (EM-01, EM-02). "
+                "Verdict: CONDITIONAL. The corridor is still the only lawful route, but its timing is now in doubt."
+            ),
+            "json": {
+                "verdict": "CONDITIONAL", "risk_score": 44,
+                "flags": [
+                    {"severity": "HIGH", "category": "Canal/Port", "title": "Caspian ferry suspended ten days",
+                     "detail": "No Alat-Aktau sailings for ~10 days. Cargo at Alat today would arrive on day 50-51, 5-6 days late.",
+                     "evidence": "NEW-01, manifest.deadline_days"},
+                    {"severity": "MEDIUM", "category": "Canal/Port", "title": "Backlog after sailings resume",
+                     "detail": "A 4-5 day backlog on top of the 2-3 day waits already reported.",
+                     "evidence": "NEW-01, EM-05"},
+                ],
+            },
+        },
+        "arbiter": {
+            "narration": (
+                "Timing matters here. Our cargo isn't at the Caspian. It's in Hamburg, held behind the dual-use licence gate. "
+                "Even once it's released, it's about two weeks by sea to Poti and two more days by rail to Alat, so it can't reach the ferry before day 17. "
+                "The suspension ends around day 10, and the backlog should clear by about day 15. "
+                "If we pre-book a slot for the first week after reopening, the realistic cost is about two days: 38 days, still seven inside the deadline. "
+                "The alternatives are worse: the Gulf route is unlawful and the landbridge is late and runs through the Red Sea. "
+                "Decision: proceed on the Middle Corridor, with a checkpoint on day 12."
+            ),
+            "json": {
+                "decision": "PROCEED", "final_route_id": "MIDDLE_CORRIDOR", "transit_days": 38,
+                "est_cost_usd": 169_000, "residual_risk_score": 30, "meets_deadline": True,
+                "mitigations": [
+                    "Keep the booking: cargo cannot reach Alat before ~day 17, after sailings resume",
+                    "Pre-book a ferry slot for the first week after reopening (~$5,000 priority fee)",
+                    "Keep the dual-use licence compliance gate unchanged",
+                    "Checkpoint: if the Aktau berth is still closed on day 12, re-run RouteGuard before cargo leaves Poti",
+                ],
+                "summary": "Hold the Middle Corridor: the ferry should be running again before our cargo reaches the Caspian. With a pre-booked slot it's 38 days and $169k, still 7 days inside the deadline.",
+            },
+        },
+    },
+}]
+
+SCENARIOS["cold_chain"]["twists"] = [{
+    "id": "houston_hurricane",
+    "label": "Hurricane forecast to hit Houston",
+    "bulletin": {"id": "NEW-01", "source": "Weather service", "category": "Weather", "severity": "CRITICAL",
+                 "text": "Hurricane forecast: storm expected to reach Category 3 and make landfall near Houston in 15-18 days. Port Houston expects a 5-7 day closure; power outages likely at Gulf cross-dock facilities and I-10 flooding east of San Antonio."},
+    "hotspot": {"name": "Houston", "lat": 29.73, "lon": -95.0, "label": "Hurricane landfall (NEW-01)", "pos": "bottom right"},
+    "script": {
+        "critic": {
+            "narration": (
+                "The booked plan now sails straight into a hurricane. "
+                "Our ship reaches Houston on day 17, right inside the forecast landfall window of days 15 to 18 (NEW-01). "
+                "The port expects to close for five to seven days, so the ship waits offshore and 23 days becomes 30 to 32, past the 28-day deadline. "
+                "Worse, the pre-cooled cross-dock we're relying on (CC-05) is exactly where the power outages are forecast. "
+                "I-10 flooding east of San Antonio blocks the trucking leg too. "
+                "If the vials leave 2 to 8 degrees for two hours, $31 million is scrap. "
+                "And Panama is still jammed (CC-01, CC-03). REJECT."
+            ),
+            "json": {
+                "verdict": "REJECT", "risk_score": 81,
+                "flags": [
+                    {"severity": "CRITICAL", "category": "Weather", "title": "Hurricane landfall as our ship arrives",
+                     "detail": "Arrival on day 17 falls inside the day 15-18 landfall window; a 5-7 day port closure follows.",
+                     "evidence": "NEW-01"},
+                    {"severity": "CRITICAL", "category": "Cargo", "title": "Cross-dock power loss threatens 2-8°C",
+                     "detail": "Forecast outages at Gulf cross-docks and I-10 flooding: a 2h excursion destroys $31M of product.",
+                     "evidence": "NEW-01, CC-05, manifest.temperature_tolerance"},
+                    {"severity": "HIGH", "category": "Canal/Port", "title": "Port closure pushes past deadline",
+                     "detail": "A 5-7 day closure turns 23 days into 30-32, 2-4 days past the 28-day deadline.",
+                     "evidence": "NEW-01, manifest.deadline_days"},
+                ],
+            },
+        },
+        "arbiter": {
+            "narration": (
+                "Both ocean options are now broken: Panama has the queue and the reefer fuel problem, and Houston has the hurricane. "
+                "The cargo hasn't loaded yet, so this is the cheapest moment to change the plan. "
+                "Pharma air freight flies Brussels to Los Angeles in two days, in active temperature-controlled containers. "
+                "It costs $468,000, plus about $15,000 to cancel the ocean booking. That's $341,000 more than the booked plan, "
+                "but it's 1.6 percent of the cargo's value, and it lands 26 days before the deadline with no storm in the way. "
+                "We split it over two flights so one delay can't hold up the whole shipment. "
+                "Decision: pivot to air."
+            ),
+            "json": {
+                "decision": "PIVOT", "final_route_id": "AIR_PHARMA", "transit_days": 2,
+                "est_cost_usd": 483_000, "residual_risk_score": 10, "meets_deadline": True,
+                "mitigations": [
+                    "Cancel the Houston sailing before loading (~$15,000 fee)",
+                    "Fly all four loads BRU-LAX in active temperature-controlled containers",
+                    "Split across two flights so one delay can't hold the whole shipment",
+                    "Keep temperature loggers on every container with excursion alerts",
+                ],
+                "summary": "Houston is in the hurricane's path, so fly the vials: 2 days and $483k in temperature-controlled containers, protecting $31M of biologics.",
+            },
+        },
+    },
+}]

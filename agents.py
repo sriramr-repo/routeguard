@@ -211,13 +211,23 @@ def build_user_message(agent: Agent, scenario: dict, ctx: dict) -> str:
     # The Optimizer is deliberately kept blind to the risk feed.
     if agent.key in ("critic", "arbiter"):
         parts.append(f"INTELLIGENCE FEED:\n{_intel_block(scenario)}")
-    if "optimizer" in ctx:
+    # A re-check reviews the booked plan (the previous Arbiter decision), not a fresh proposal.
+    recheck = "current_plan" in ctx
+    if recheck:
+        parts.append(f"CURRENT BOOKED PLAN (previous Arbiter decision):\n{json.dumps(ctx['current_plan'], indent=2)}")
+    elif "optimizer" in ctx:
         parts.append(f"OPTIMIZER PROPOSAL:\n{json.dumps(ctx['optimizer'], indent=2)}")
     if "critic" in ctx:
         parts.append(f"CRITIC FINDINGS:\n{json.dumps(ctx['critic'], indent=2)}")
+    new_ids = ", ".join(b["id"] for b in scenario["intel"] if b.get("new"))
     parts.append({
         "optimizer": "Propose your route.",
-        "critic": "Attack the Optimizer's proposal.",
-        "arbiter": "Issue the final binding routing decision.",
+        "critic": (f"A BREAKING bulletin just arrived ({new_ids}). Re-check the booked plan against it and all "
+                   "other intel; lead with what changed. Judge the booked route, not the original proposal."
+                   if recheck else "Attack the Optimizer's proposal."),
+        "arbiter": ("Confirm or change the booked plan. Re-routing an existing booking has real cost: PROCEED on "
+                    "the same route (with mitigations) if it is still legal, safe and on time; PIVOT or HOLD "
+                    "only if it is not."
+                    if recheck else "Issue the final binding routing decision."),
     }[agent.key])
     return "\n\n".join(parts)

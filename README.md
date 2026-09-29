@@ -58,6 +58,16 @@ Pick a scenario in the sidebar and click **▶ Run the swarm**.
 | **Dual-use machine tools via a newly sanctioned port**: $6.4M of 5-axis CNC centres, Hamburg → Tashkent | Via Bandar Abbas: 27 days, $118k | Newly sanctioned terminal operator, **dual-use items with no export licence**, forwarder linked to a diversion network, no insurance cover. Risk **98/100**. | **Pivot** to the Trans-Caspian Middle Corridor, cargo released only once the licence is granted: **36 days, $164k**, risk 26 |
 | **Biologics vs. a jammed Panama Canal**: $31M of 2-8 °C vials, Antwerp → Los Angeles | Panama: 21 days, $96k | 12–16 day canal queue, **refrigerated-container fuel lasts 9–10 days**, boxes offloaded to meet the draft limit, tropical storm. Risk **84/100**. | **Pivot** to sea-to-Houston + refrigerated-truck landbridge: **23 days, $142k**, risk 14 |
 
+**⚡ Breaking news:** once the Arbiter has decided, pick a breaking event under the map and click **Inject & re-check**. The new bulletin (cited as `NEW-01`) lights up on the map, the Critic re-attacks the *booked* route with it, and the Arbiter either holds course or pivots again. A "What changed" card compares before and after, and a decision history keeps every version. The Optimizer doesn't run again: it can't see intel, so it would only propose the same route.
+
+| Scenario | Breaking event | Arbiter's update |
+|---|---|---|
+| Red Sea | Strike and gales at the Cape Town terminal | **Holds course**: skip the Cape Town call and refuel at Port Louis. 31 days, $620k |
+| Dual-use | Caspian ferry suspended for 10 days | **Holds course**: the cargo can't reach the ferry before it reopens. Pre-book a slot: 38 days, $169k |
+| Biologics | Hurricane forecast to hit Houston as the ship arrives | **Re-routes** to temperature-controlled air freight: 2 days, $483k |
+
+In Live mode you can also write your own bulletin. It's pinned to the first port or chokepoint it names on a candidate route.
+
 **Engine:** "Replay" (the default) streams pre-recorded agent output: offline, identical every run, safe for the stage. "Live" calls Claude with the same prompts and data.
 
 **Your own shipment:** set the sidebar's **Data** option to *Connected sources (your shipment)*. Upload a manifest (JSON/CSV) or pick a sample. RouteGuard pulls candidate routes and intel from every source in `config/sources.toml`, shows a per-source status table and previews the lanes on the map. Then the agents run live on the result.
@@ -82,6 +92,7 @@ Terminal version, with no UI:
 ```bash
 python pipeline.py --scenario red_sea                                              # curated demo, replay
 python pipeline.py --scenario embargo --live                                       # curated demo, live Claude
+python pipeline.py --scenario cold_chain --twist                                   # then inject breaking news and re-check
 python pipeline.py --manifest examples/manifests/cnc_tashkent.json --ingest-only   # show what the sources produce
 python pipeline.py --manifest my_shipment.csv                                      # full live run on your data
 python -m unittest discover -s tests                                               # connector tests
@@ -228,7 +239,7 @@ Each shipment evaluation is independent, so the work runs in parallel across shi
 2. ~~Connectors: maritime security, sanctions, export controls, canal/port notices, carrier schedules~~ ✅ built (sample-wired)
 3. Verify and switch on live endpoints; add insurer listed-area and AIS vessel-position adapters.
 4. Deterministic tools the agents can call: cost and transit calculators.
-5. Continuous monitoring: re-check in-flight shipments whenever new intel arrives.
+5. Continuous monitoring: re-check in-flight shipments whenever new intel arrives. *First step built: breaking-news injection re-checks a booked plan on demand.*
 6. Human approval, audit log and TMS integration.
 7. Evaluation benchmark against historical disruptions.
 
@@ -251,7 +262,7 @@ sources/               Data connectors
 config/                sources.toml (sample-wired) + production example
 data/ports.csv         Port lookup (UN/LOCODE, coordinates)
 examples/              Sample manifests, feeds, lists, schedules (fictional)
-tests/                 Connector tests
+tests/                 Connector and re-check tests
 ARCHITECTURE.md        System design, diagrams, connector layer, production roadmap
 requirements.txt       streamlit, plotly, anthropic
 .streamlit/            Dark theme config

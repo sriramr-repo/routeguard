@@ -15,7 +15,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from agents import AGENTS
-from pipeline import ClaudeBackend, ReplayBackend, run_swarm
+from pipeline import (ClaudeBackend, ReplayBackend, make_breaking_bulletin, recheck_scenario,
+                      run_recheck, run_swarm)
 from scenarios import SCENARIOS
 from sources import build_scenario, load_manifest
 
@@ -75,6 +76,15 @@ h1.rg-title {font-size: 2.1rem; margin: 0; letter-spacing: -0.02em;}
 .rg-kpi .v {font-size:1.35rem; font-weight:700;}
 .rg-kpi .d {font-size:0.78rem; color:#94a3b8;}
 .rg-intel {font-size:0.84rem; padding:6px 0; border-bottom:1px solid #1e293b;}
+.rg-banner.amber {background:linear-gradient(90deg,#78350f,#3b1a06); border:1px solid #f59e0b;}
+.rg-new {display:inline-block; padding:0 7px; border-radius:999px; font-size:0.66rem; font-weight:800;
+         letter-spacing:0.06em; background:#f59e0b; color:#1c1206; margin-right:6px; vertical-align:1px;}
+.rg-diff {background:#111a2e; border:1px solid #1e293b; border-radius:12px; padding:10px 14px; margin-top:6px;}
+.rg-diff .h {font-weight:700; margin-bottom:6px;}
+.rg-diff table {width:100%; border-collapse:collapse; font-size:0.9rem;}
+.rg-diff td {padding:4px 6px; border-top:1px solid #1e293b;}
+.rg-diff td.k {color:#94a3b8; font-size:0.74rem; text-transform:uppercase; letter-spacing:0.06em;}
+.rg-diff td.ch {font-weight:700;}
 @media (max-width: 900px) {.rg-manifest, .rg-kpis {grid-template-columns: repeat(2, minmax(0,1fr));}}
 </style>
 """, unsafe_allow_html=True)
@@ -194,9 +204,11 @@ def result_card(key: str, d: dict, scenario: dict) -> str:
                 f' &nbsp;·&nbsp; {d.get("transit_days")} days &nbsp;·&nbsp; {money(d.get("est_cost_usd", 0))}'
                 f' &nbsp;·&nbsp; deadline {"✅" if d.get("meets_deadline") else "❌"}</div>')
     if key == "critic":
+        new_ids = [b["id"] for b in scenario["intel"] if b.get("new")]
         flags = "".join(
             f'<div class="rg-flag" style="--s:{SEV_COLOR.get(f.get("severity"), "#ef4444")};animation-delay:{i * 0.12:.2f}s">'
-            f'<div class="t"><span style="color:{SEV_COLOR.get(f.get("severity"), "#ef4444")}">{html.escape(f.get("severity", ""))}</span>'
+            f'<div class="t">{"<span class=rg-new>NEW</span>" if any(i in f.get("evidence", "") for i in new_ids) else ""}'
+            f'<span style="color:{SEV_COLOR.get(f.get("severity"), "#ef4444")}">{html.escape(f.get("severity", ""))}</span>'
             f' · {html.escape(f.get("category", ""))} · {html.escape(f.get("title", ""))}</div>'
             f'<div class="d">{html.escape(f.get("detail", ""))}</div>'
             f'<div class="e">Evidence: {html.escape(f.get("evidence", ""))}</div></div>'
@@ -212,6 +224,53 @@ def result_card(key: str, d: dict, scenario: dict) -> str:
     return ""
 
 
+def booked_panel(plan: dict, scenario: dict) -> str:
+    """Stands in for the Optimizer during a re-check: the plan currently booked."""
+    r = scenario["routes"].get(plan.get("final_route_id"), {})
+    return f"""
+<div class="rg-agent" style="--c:#f59e0b">
+  <div class="rg-head"><span class="av">📌</span>
+    <div><div class="nm" style="color:#f59e0b">Booked plan</div><div class="rl">The previous Arbiter decision, now under review</div></div>
+    <span class="st" style="color:#f59e0b">RE-CHECKING</span></div>
+  <div class="rg-card">📍 <b>{html.escape(r.get("name", plan.get("final_route_id", "?")))}</b>
+    &nbsp;·&nbsp; {plan.get("transit_days")} days &nbsp;·&nbsp; {money(plan.get("est_cost_usd"))}
+    &nbsp;·&nbsp; risk {plan.get("residual_risk_score")}</div>
+</div>"""
+
+
+def diff_card(before: dict, after: dict, bulletin: dict, n: int, scenario: dict) -> str:
+    """Side-by-side of the booked plan and the re-checked decision."""
+    routes = scenario["routes"]
+
+    def name(d):
+        return routes.get(d.get("final_route_id"), {}).get("name", d.get("final_route_id", "?"))
+
+    def delta(b, a, fmt, lower_is_better=True):
+        if not isinstance(b, (int, float)) or not isinstance(a, (int, float)) or a == b:
+            return ""
+        good = (a < b) == lower_is_better
+        return (f' <span style="color:{"#22c55e" if good else "#ef4444"}">'
+                f'({"+" if a > b else "-"}{fmt(abs(a - b))})</span>')
+
+    rows = [
+        ("Route", html.escape(name(before)), html.escape(name(after)), ""),
+        ("Transit", f"{before.get('transit_days')} d", f"{after.get('transit_days')} d",
+         delta(before.get("transit_days"), after.get("transit_days"), lambda v: f"{v} d")),
+        ("Cost", money(before.get("est_cost_usd")), money(after.get("est_cost_usd")),
+         delta(before.get("est_cost_usd"), after.get("est_cost_usd"), money)),
+        ("Risk", str(before.get("residual_risk_score")), str(after.get("residual_risk_score")),
+         delta(before.get("residual_risk_score"), after.get("residual_risk_score"), str)),
+        ("Deadline", "met ✅" if before.get("meets_deadline") else "missed ❌",
+         "met ✅" if after.get("meets_deadline") else "missed ❌", ""),
+    ]
+    body = "".join(
+        f'<tr><td class="k">{k}</td><td>{b}</td><td>→</td>'
+        f'<td class="{"ch" if b != a else ""}">{a}{d}</td></tr>' for k, b, a, d in rows)
+    return (f'<div class="rg-diff"><div class="h">⚡ Update #{n} · {html.escape(bulletin["text"][:90])}'
+            f'{"…" if len(bulletin["text"]) > 90 else ""} ({html.escape(bulletin["id"])})</div>'
+            f'<table><tr><td></td><td class="k">Before</td><td></td><td class="k">After</td></tr>{body}</table></div>')
+
+
 def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
     """stage 0: nothing, 1: optimizer route, 2: critic hotspots (route red), 3: arbiter route."""
     fig = go.Figure()
@@ -222,7 +281,7 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
 
     shown: set[str] = set()
 
-    def draw(route_id: str, color: str, width: float, opacity: float, name: str):
+    def draw(route_id: str, color: str, width: float, opacity: float, name: str, dash: str | None = None):
         r = routes.get(route_id)
         if not r:
             return
@@ -230,9 +289,9 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
             first = i == 0 and name not in shown
             shown.add(name)
             lats, lons = zip(*leg["pts"])
-            dash = {"sea": "solid", "land": "dash", "air": "dot"}[leg["mode"]]
+            style = dash or {"sea": "solid", "land": "dash", "air": "dot"}[leg["mode"]]
             fig.add_trace(go.Scattergeo(
-                lat=lats, lon=lons, mode="lines", line=dict(width=width, color=color, dash=dash),
+                lat=lats, lon=lons, mode="lines", line=dict(width=width, color=color, dash=style),
                 opacity=opacity, name=name, showlegend=first, legendgroup=name, hoverinfo="name"))
         first, last = r["legs"][0]["pts"][0], r["legs"][-1]["pts"][-1]
         fig.add_trace(go.Scattergeo(
@@ -242,7 +301,34 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
             textfont=dict(color="#e2e8f0", size=11), showlegend=False, hoverinfo="skip", opacity=opacity))
 
     opt = ctx.get("optimizer", {}).get("route_id")
-    if stage == 0 and scenario.get("live_data"):
+    plan = ctx.get("current_plan")
+    if plan:  # re-check after breaking news: booked route, the new hotspot, then the decision
+        booked, final = plan.get("final_route_id"), ctx.get("arbiter", {}).get("final_route_id")
+        if stage >= 3 and final:
+            if final != booked:
+                draw(booked, "#94a3b8", 2.0, 0.5, "Previous plan", dash="dash")
+            draw(final, "#22c55e", 4.5, 1.0, "Confirmed route" if final == booked else "New route")
+        else:
+            rejected = ctx.get("critic", {}).get("verdict") == "REJECT"
+            draw(booked, "#ef4444" if rejected else "#f59e0b", 3.5, 1.0, "Booked route")
+        old = [h for h in scenario["hotspots"] if not h.get("new")]
+        if old:
+            fig.add_trace(go.Scattergeo(
+                lat=[h["lat"] for h in old], lon=[h["lon"] for h in old], mode="markers",
+                marker=dict(size=10, color="#ef4444", symbol="x", opacity=0.6, line=dict(width=1, color="white")),
+                text=[f"⚠ {h['label']}" for h in old], name="Earlier risks", hoverinfo="text"))
+        new = [h for h in scenario["hotspots"] if h.get("new")]
+        if new:
+            fig.add_trace(go.Scattergeo(
+                lat=[h["lat"] for h in new], lon=[h["lon"] for h in new], mode="markers",
+                marker=dict(size=46, color="rgba(245,158,11,0.3)"), showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scattergeo(
+                lat=[h["lat"] for h in new], lon=[h["lon"] for h in new], mode="markers+text",
+                marker=dict(size=16, color="#f59e0b", symbol="star", line=dict(width=1, color="white")),
+                text=[f"⚡ BREAKING: {h['label']}" for h in new],
+                textposition=[h.get("pos", "bottom right") for h in new],
+                textfont=dict(color="#fcd34d", size=13), name="Breaking news", hoverinfo="text"))
+    elif stage == 0 and scenario.get("live_data"):
         for rid in routes:
             draw(rid, "#64748b", 2.0, 0.8, "Candidate routes")
         hs = scenario["hotspots"]
@@ -251,9 +337,9 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
                 lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs], mode="markers",
                 marker=dict(size=11, color="#f59e0b", line=dict(width=1, color="white")),
                 text=[h["label"] for h in hs], name="Intel on these lanes", hoverinfo="text"))
-    if stage == 1 and opt:
+    if stage == 1 and opt and not plan:
         draw(opt, "#3b82f6", 3.5, 1.0, "Optimizer proposal")
-    if stage >= 2 and opt:
+    if stage >= 2 and opt and not plan:
         draw(opt, "#ef4444", 3.5 if stage == 2 else 2.0, 1.0 if stage == 2 else 0.35,
              "Rejected by Critic" if stage == 2 else "Rejected route")
         hs = scenario["hotspots"]
@@ -266,7 +352,7 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
             marker=dict(size=13, color="#ef4444", symbol="x", line=dict(width=1, color="white")),
             text=[f"⚠ {h['label']}" for h in hs], textposition=[h.get("pos", "bottom right") for h in hs],
             textfont=dict(color="#fca5a5", size=12), name="Risk hotspots", hoverinfo="text"))
-    if stage >= 3:
+    if stage >= 3 and not plan:
         final = ctx.get("arbiter", {}).get("final_route_id")
         if final:
             draw(final, "#22c55e", 4.5, 1.0, "Arbiter final route")
@@ -284,9 +370,11 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
     return fig
 
 
-def banner(stage: int, ctx: dict) -> str:
+def banner(stage: int, ctx: dict, breaking: dict | None = None) -> str:
     if stage == 0:
         return ""
+    if "current_plan" in ctx:
+        return recheck_banner(ctx, breaking or {})
     if stage == 1:
         return '<div class="rg-banner blue">🧭 Optimizer is planning the fastest route…</div>'
     if stage == 2:
@@ -300,6 +388,25 @@ def banner(stage: int, ctx: dict) -> str:
     if not a:
         return '<div class="rg-banner red">⚖️ Arbiter is resolving the conflict…</div>'
     return f'<div class="rg-banner green">⚖️ {html.escape(a.get("summary", ""))}</div>'
+
+
+def recheck_banner(ctx: dict, breaking: dict) -> str:
+    c, a, plan = ctx.get("critic"), ctx.get("arbiter"), ctx["current_plan"]
+    news = html.escape(breaking.get("text", ""))
+    if not c:
+        return f'<div class="rg-banner red">⚡ BREAKING: {news}<br><small>Critic is re-checking the booked plan…</small></div>'
+    if not a:
+        n = sum(1 for f in c.get("flags", []) if breaking.get("id", "?") in f.get("evidence", ""))
+        return (f'<div class="rg-banner red">⚡ {html.escape(c.get("verdict", ""))}: {n} new flag(s) from '
+                f'{html.escape(breaking.get("id", ""))} · risk {c.get("risk_score")}/100<br>'
+                f'<small>Arbiter is deciding whether to hold course…</small></div>')
+    summary = html.escape(a.get("summary", ""))
+    if a.get("decision") == "PROCEED":
+        return f'<div class="rg-banner green">🟢 HOLDING COURSE · {summary}</div>'
+    if a.get("decision") == "PIVOT":
+        return (f'<div class="rg-banner amber">🟠 RE-ROUTED · {html.escape(str(plan.get("final_route_id")))} → '
+                f'{html.escape(str(a.get("final_route_id")))} · {summary}</div>')
+    return f'<div class="rg-banner red">🔴 ON HOLD · {summary}</div>'
 
 
 def kpis(ctx: dict, scenario: dict) -> str:
@@ -396,7 +503,11 @@ m = scenario["manifest"]
 # reset stored results when scenario changes
 if st.session_state.get("last_scen") != scen_key:
     st.session_state["result"] = None
+    st.session_state["history"] = []  # breaking-news re-checks on top of the result
     st.session_state["last_scen"] = scen_key
+history: list[dict] = st.session_state.setdefault("history", [])
+# the scenario as it stands after every injected bulletin so far
+view_scen = history[-1]["scenario"] if history else scenario
 
 # ------------------------------------------------------------------ header
 st.markdown(safe('<h1 class="rg-title">🛰️ RouteGuard</h1>'
@@ -427,8 +538,10 @@ with st.expander("📡 Intelligence feed " + ("(from connected sources)" if scen
                  + " and full manifest"):
     c1, c2 = st.columns([3, 2])
     with c1:
-        for b in scenario["intel"]:
-            st.markdown(safe(f'<div class="rg-intel"><b style="color:{SEV_COLOR.get(b["severity"], "#94a3b8")}">'
+        for b in view_scen["intel"]:
+            st.markdown(safe(f'<div class="rg-intel">'
+                + ('<span class="rg-new">BREAKING</span>' if b.get("time") == "BREAKING" else "")
+                + f'<b style="color:{SEV_COLOR.get(b["severity"], "#94a3b8")}">'
                 f'[{b["id"]}] {b["severity"]}</b> · {html.escape(str(b.get("time", "")))} · <i>{html.escape(b["source"])}</i><br>'
                 f'{html.escape(b["text"])}'
                 + (f' <a href="{html.escape(b["url"])}" target="_blank">source</a>' if b.get("url") else "")
@@ -449,6 +562,7 @@ with right:
     banner_ph = st.empty()
     map_ph = st.empty()
     kpi_ph = st.empty()
+    news_box = st.container()
 
 
 def render_static(result: dict | None):
@@ -467,53 +581,61 @@ def render_static(result: dict | None):
     kpi_ph.markdown(safe(kpis(ctx, scenario)), unsafe_allow_html=True)
 
 
-if not run:
-    render_static(st.session_state.get("result"))
-else:
-    # ---------------------------------------------------------- live run
+def render_recheck(entry: dict, n: int):
+    """The latest breaking-news re-check: booked plan, Critic, Arbiter, map, what changed."""
+    scen, ctx, narr = entry["scenario"], entry["ctx"], entry["narr"]
+    panel_ph["optimizer"].markdown(safe(booked_panel(ctx["current_plan"], scen)), unsafe_allow_html=True)
+    for key, status in (("critic", "alert"), ("arbiter", "resolved")):
+        panel_ph[key].markdown(safe(agent_panel(key, narr.get(key, ""), ctx.get(key), status, scen)),
+                               unsafe_allow_html=True)
+    banner_ph.markdown(safe(banner(3, ctx, entry["bulletin"])), unsafe_allow_html=True)
+    map_ph.plotly_chart(build_map(scen, 3, ctx), width="stretch",
+                        config={"displayModeBar": False}, key=f"map_recheck_{scen_key}_{n}")
+    kpi_ph.markdown(safe(diff_card(ctx["current_plan"], ctx["arbiter"], entry["bulletin"], n, scen)),
+                    unsafe_allow_html=True)
+
+
+def make_backend():
+    """The engine picked in the sidebar; Live without a usable key falls back to replay."""
     replay = ReplayBackend(speed=speed)
-    backend = replay
-    if connected and not api_key:
-        render_static(None)
-        st.error("Connected-data runs need the Live engine: add ANTHROPIC_API_KEY in Secrets or paste it in the sidebar.")
-        st.stop()
-    if engine.startswith("Live"):
+    if engine.startswith("Live") and api_key:
         try:
-            backend = ClaudeBackend(model=model, api_key=api_key) if api_key else replay
+            return ClaudeBackend(model=model, api_key=api_key), replay
         except Exception as exc:
             st.toast(f"Live engine unavailable ({exc}); using replay.", icon="⚠️")
-            backend = replay
+    return replay, replay
 
-    ctx: dict = {}
+
+def stream_events(events, scen: dict, ctx: dict, breaking: dict | None = None) -> tuple[dict, dict, bool]:
+    """Render a run as it streams. Returns (ctx, narrations, finished)."""
     narr: dict = {}
     run_id = str(time.time_ns())
-    for a in AGENTS:
-        panel_ph[a.key].markdown(safe(agent_panel(a.key, "", None, "idle", scenario)), unsafe_allow_html=True)
-    kpi_ph.empty()
+    done = False
 
     def show_map(stage: int):
-        map_ph.plotly_chart(build_map(scenario, stage, ctx), width="stretch",
+        map_ph.plotly_chart(build_map(scen, stage, ctx), width="stretch",
                             config={"displayModeBar": False}, key=f"map_{run_id}_{stage}_{len(ctx)}")
 
-    show_map(0)
+    show_map(2 if breaking else 0)
     buf = ""
     stage = 0
+
     def _guard(gen):
         try:
             yield from gen
         except Exception as exc:
             st.error(f"The swarm stopped: {type(exc).__name__}: {exc}")
 
-    for ev in _guard(run_swarm(scenario, backend, fallback=replay)):
+    for ev in _guard(events):
         if ev.type == "agent_start":
             buf = ""
             stage = {"optimizer": 1, "critic": 2, "arbiter": 3}[ev.agent]
-            banner_ph.markdown(safe(banner(stage, ctx)), unsafe_allow_html=True)
+            banner_ph.markdown(safe(banner(stage, ctx, breaking)), unsafe_allow_html=True)
         elif ev.type == "token":
             buf += ev.text
             visible = buf.split("<json>")[0]
             status = "alert" if ev.agent == "critic" and len(visible) > 40 else "thinking"
-            panel_ph[ev.agent].markdown(safe(agent_panel(ev.agent, visible, None, status, scenario)), unsafe_allow_html=True)
+            panel_ph[ev.agent].markdown(safe(agent_panel(ev.agent, visible, None, status, scen)), unsafe_allow_html=True)
         elif ev.type == "repair":
             st.toast(f"{AGENT_BY_KEY[ev.agent].name}: verdict block malformed, recovered via structured call.", icon="🔧")
         elif ev.type == "fallback":
@@ -523,11 +645,100 @@ else:
             ctx[ev.agent] = ev.data
             narr[ev.agent] = ev.text
             status = {"critic": "alert", "arbiter": "resolved"}.get(ev.agent, "done")
-            panel_ph[ev.agent].markdown(safe(agent_panel(ev.agent, ev.text, ev.data, status, scenario)), unsafe_allow_html=True)
-            banner_ph.markdown(safe(banner(stage, ctx)), unsafe_allow_html=True)
+            panel_ph[ev.agent].markdown(safe(agent_panel(ev.agent, ev.text, ev.data, status, scen)), unsafe_allow_html=True)
+            banner_ph.markdown(safe(banner(stage, ctx, breaking)), unsafe_allow_html=True)
             show_map(stage)
             if ev.agent == "critic":
                 time.sleep(1.2 / speed)  # let the red alert land before the Arbiter speaks
         elif ev.type == "swarm_done":
-            kpi_ph.markdown(safe(kpis(ctx, scenario)), unsafe_allow_html=True)
-            st.session_state["result"] = {"ctx": ctx, "narr": narr}
+            done = True
+    return ctx, narr, done
+
+
+if not run:
+    if history:
+        render_recheck(history[-1], len(history))
+    else:
+        render_static(st.session_state.get("result"))
+else:
+    # ---------------------------------------------------------- live run
+    if connected and not api_key:
+        render_static(None)
+        st.error("Connected-data runs need the Live engine: add ANTHROPIC_API_KEY in Secrets or paste it in the sidebar.")
+        st.stop()
+    backend, replay = make_backend()
+    history.clear()
+    view_scen = scenario
+    for a in AGENTS:
+        panel_ph[a.key].markdown(safe(agent_panel(a.key, "", None, "idle", scenario)), unsafe_allow_html=True)
+    kpi_ph.empty()
+    ctx, narr, done = stream_events(run_swarm(scenario, backend, fallback=replay), scenario, {})
+    if done:
+        kpi_ph.markdown(safe(kpis(ctx, scenario)), unsafe_allow_html=True)
+        st.session_state["result"] = {"ctx": ctx, "narr": narr}
+
+
+# ------------------------------------------------------------------ breaking news
+result = st.session_state.get("result")
+if result and "arbiter" in result.get("ctx", {}):
+    live = engine.startswith("Live") and bool(api_key)
+    used = {h.get("twist") for h in history}
+    twists = [t for t in scenario.get("twists", []) if t["id"] not in used]
+    with news_box:
+        st.markdown("##### ⚡ Breaking news")
+        options = [t["label"] for t in twists] + (["✍️ Write my own bulletin…"] if live else [])
+        if not options:
+            st.caption("No more pre-recorded events for this scenario. Switch to the Live engine "
+                       "to write your own bulletin.")
+            choice, inject = None, False
+        else:
+            choice = st.selectbox("Event", options, key=f"twist_{scen_key}_{len(history)}",
+                                  label_visibility="collapsed")
+            custom = ""
+            if choice == "✍️ Write my own bulletin…":
+                custom = st.text_area("Bulletin", key=f"custom_{scen_key}_{len(history)}",
+                                      placeholder="e.g. Dockworkers at Rotterdam begin a 72-hour strike on Monday",
+                                      label_visibility="collapsed")
+            inject = st.button("⚡ Inject & re-check", width="stretch", key=f"inject_{scen_key}_{len(history)}")
+        if history:
+            with st.expander(f"🕒 Decision history ({len(history) + 1} versions)"):
+                versions = [("v1", "Initial decision", result["ctx"]["arbiter"])] + [
+                    (f"v{i + 2}", f'{h["bulletin"]["id"]}: {h["bulletin"]["text"][:70]}…', h["ctx"]["arbiter"])
+                    for i, h in enumerate(history)]
+                st.dataframe([{"Version": v, "Trigger": t, "Decision": a.get("decision"),
+                               "Route": a.get("final_route_id"), "Days": a.get("transit_days"),
+                               "Cost": money(a.get("est_cost_usd")), "Risk": a.get("residual_risk_score")}
+                              for v, t, a in versions], width="stretch", hide_index=True)
+
+    if inject:
+        bid = f"NEW-{len(history) + 1:02d}"
+        twist = next((t for t in twists if t["label"] == choice), None)
+        if twist:
+            bulletin = {**twist["bulletin"], "id": bid}
+            hotspot = twist.get("hotspot")
+            if hotspot:
+                hotspot = {**hotspot, "label": hotspot["label"].replace(twist["bulletin"]["id"], bid)}
+            script = twist["script"] if bid == twist["bulletin"]["id"] else None  # replay cites its own id
+        elif custom.strip():
+            bulletin, hotspot = make_breaking_bulletin(custom, view_scen, bid)
+            script = None
+        else:
+            st.warning("Write the bulletin first.")
+            st.stop()
+        backend, replay = make_backend()
+        if not live and not script:
+            st.warning("This event has no pre-recorded replay. Switch to the Live engine to run it.")
+            st.stop()
+        prior = history[-1]["ctx"] if history else result["ctx"]
+        rescen = recheck_scenario(view_scen, bulletin, hotspot, script)
+        st.toast(f"⚡ Breaking: {bulletin['text'][:80]}", icon="⚡")
+        panel_ph["optimizer"].markdown(safe(booked_panel(prior["arbiter"], rescen)), unsafe_allow_html=True)
+        for key in ("critic", "arbiter"):
+            panel_ph[key].markdown(safe(agent_panel(key, "", None, "idle", rescen)), unsafe_allow_html=True)
+        kpi_ph.empty()
+        seed = {"current_plan": prior["arbiter"]}
+        ctx, narr, done = stream_events(run_recheck(rescen, backend, prior, fallback=replay), rescen, seed, bulletin)
+        if done:
+            history.append({"twist": twist["id"] if twist else None, "bulletin": bulletin, "hotspot": hotspot,
+                            "scenario": rescen, "ctx": ctx, "narr": narr})
+            st.rerun()  # redraw with the history and the next set of events

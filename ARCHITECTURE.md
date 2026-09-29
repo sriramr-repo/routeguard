@@ -109,6 +109,10 @@ sequenceDiagram
     P-->>UI: final route (green) + KPI strip
 ```
 
+### Re-check after breaking news
+
+When a new bulletin arrives after the decision, `pipeline.run_recheck` runs a shortened loop. The bulletin goes to the top of the intel feed, marked `new`, and `ctx` is seeded with `current_plan` (the previous Arbiter verdict). Only the Critic and the Arbiter run. The Critic attacks the booked plan rather than a fresh proposal, and the Arbiter is told that re-routing an existing booking has real cost, so PROCEED is a valid answer. Each re-check becomes the next booked plan, so events can be chained. Curated scenarios carry a pre-recorded `twists` entry for Replay. Free-text bulletins (Live only) are placed on the map by the same deterministic place matching the connectors use (`sources.geo.match_location`).
+
 ### Why this shape
 
 - **The Optimizer is deliberately blind to the intel feed.** This models how traditional routing software behaves: it optimizes time and cost against a static rate table. The gap between its plan and the Critic's findings *is* the product's value, and it's visible to the judges.

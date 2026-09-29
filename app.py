@@ -170,16 +170,20 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
                                 showlegend=False, hoverinfo="skip"))
     routes = scenario["routes"]
 
+    shown: set[str] = set()
+
     def draw(route_id: str, color: str, width: float, opacity: float, name: str):
         r = routes.get(route_id)
         if not r:
             return
         for i, leg in enumerate(r["legs"]):
+            first = i == 0 and name not in shown
+            shown.add(name)
             lats, lons = zip(*leg["pts"])
             dash = {"sea": "solid", "land": "dash", "air": "dot"}[leg["mode"]]
             fig.add_trace(go.Scattergeo(
                 lat=lats, lon=lons, mode="lines", line=dict(width=width, color=color, dash=dash),
-                opacity=opacity, name=name, showlegend=(i == 0), hoverinfo="name"))
+                opacity=opacity, name=name, showlegend=first, legendgroup=name, hoverinfo="name"))
         first, last = r["legs"][0]["pts"][0], r["legs"][-1]["pts"][-1]
         fig.add_trace(go.Scattergeo(
             lat=[first[0], last[0]], lon=[first[1], last[1]], mode="markers+text",

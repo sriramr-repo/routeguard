@@ -153,4 +153,4 @@ def map_center(routes: dict) -> dict:
     lats, lons = [p[0] for p in pts], [p[1] for p in pts]
     span = max(max(lats) - min(lats), (max(lons) - min(lons)) / 1.6, 10)
     return {"lat": (max(lats) + min(lats)) / 2, "lon": (max(lons) + min(lons)) / 2,
-            "scale": round(max(1.0, min(4.0, 120 / span)), 2)}
+            "scale": round(max(1.0, min(3.0, 90 / span)), 2)}

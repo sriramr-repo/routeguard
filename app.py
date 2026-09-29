@@ -106,12 +106,32 @@ def money(v) -> str:
 
 
 def get_api_key() -> str | None:
+    """Find the Anthropic key in Streamlit secrets (any casing, top level or inside a section)
+    or the environment. Never displayed or logged."""
+    def scan(d) -> str | None:
+        try:
+            items = list(d.items())
+        except Exception:
+            return None
+        for k, v in items:
+            if isinstance(v, str) and v.startswith("sk-ant-"):
+                return v
+            if isinstance(v, str) and "anthropic" in k.lower() and "key" in k.lower():
+                return v
+        for k, v in items:
+            if not isinstance(v, str):
+                found = scan(v)
+                if found:
+                    return found
+        return None
+
     try:
-        if "ANTHROPIC_API_KEY" in st.secrets:
-            return st.secrets["ANTHROPIC_API_KEY"]
+        found = scan(st.secrets)
+        if found:
+            return found.strip()
     except Exception:
         pass
-    return os.environ.get("ANTHROPIC_API_KEY")
+    return os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("anthropic_api_key")
 
 
 def agent_panel(key: str, narration: str, data: dict | None, status: str, scenario: dict) -> str:

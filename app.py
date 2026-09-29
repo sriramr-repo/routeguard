@@ -419,8 +419,8 @@ if source_report:
                      f"{len(scenario['routes'])} candidate routes · {len(scenario['intel'])} relevant bulletins"):
         st.dataframe(
             [{"Source": r["source"], "Type": r["kind"], "Status": r["status"], "Items": r["items"],
-              "ms": r.get("ms", "")} for r in source_report],
-            use_container_width=True, hide_index=True)
+              "ms": r.get("ms")} for r in source_report],
+            width="stretch", hide_index=True)
         st.caption(f"Config: {SOURCES_CONFIG}. Failing sources are skipped, never fatal.")
 
 with st.expander("📡 Intelligence feed " + ("(from connected sources)" if scenario.get("live_data") else "(simulated)")
@@ -438,7 +438,7 @@ with st.expander("📡 Intelligence feed " + ("(from connected sources)" if scen
     with c2:
         st.json(m)
 
-run = st.button("▶  Run the swarm", type="primary", use_container_width=True)
+run = st.button("▶  Run the swarm", type="primary", width="stretch")
 
 left, right = st.columns([11, 10], gap="large")
 with left:
@@ -462,7 +462,7 @@ def render_static(result: dict | None):
         text = narr.get(a.key, "") or ("Waiting for the swarm to start." if not result else "")
         panel_ph[a.key].markdown(safe(agent_panel(a.key, text, ctx.get(a.key), status, scenario)), unsafe_allow_html=True)
     banner_ph.markdown(safe(banner(stage, ctx)), unsafe_allow_html=True)
-    map_ph.plotly_chart(build_map(scenario, stage, ctx), use_container_width=True,
+    map_ph.plotly_chart(build_map(scenario, stage, ctx), width="stretch",
                         config={"displayModeBar": False}, key=f"map_static_{scen_key}_{stage}")
     kpi_ph.markdown(safe(kpis(ctx, scenario)), unsafe_allow_html=True)
 
@@ -492,7 +492,7 @@ else:
     kpi_ph.empty()
 
     def show_map(stage: int):
-        map_ph.plotly_chart(build_map(scenario, stage, ctx), use_container_width=True,
+        map_ph.plotly_chart(build_map(scenario, stage, ctx), width="stretch",
                             config={"displayModeBar": False}, key=f"map_{run_id}_{stage}_{len(ctx)}")
 
     show_map(0)

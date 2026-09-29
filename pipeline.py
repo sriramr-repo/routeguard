@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from agents import AGENTS, Agent, build_user_message
+from agents import AGENTS, VERDICT_SCHEMAS, Agent, build_user_message
 
 JSON_RE = re.compile(r"<json>\s*(\{.*\})\s*</json>", re.DOTALL)
 
@@ -81,12 +81,35 @@ class ClaudeBackend:
     def stream(self, agent: Agent, scenario: dict, user_msg: str) -> Iterator[str]:
         with self.client.messages.stream(
             model=self.model,
-            max_tokens=1500,
+            max_tokens=4000,
             system=agent.system_prompt,
             messages=[{"role": "user", "content": user_msg}],
         ) as s:
             for text in s.text_stream:
                 yield text
+
+    def repair(self, agent: Agent, user_msg: str, narration: str) -> dict:
+        """Recover the verdict with a forced, schema-validated tool call when the model's
+        free-text <json> block is missing or malformed. Keeps the agent's own reasoning."""
+        resp = self.client.messages.create(
+            model=self.model,
+            max_tokens=3000,
+            system=agent.system_prompt,
+            tools=[{"name": "submit_verdict",
+                    "description": f"Submit the {agent.name}'s final structured verdict.",
+                    "input_schema": VERDICT_SCHEMAS[agent.key]}],
+            tool_choice={"type": "tool", "name": "submit_verdict"},
+            messages=[
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": narration.strip() or "(reasoning omitted)"},
+                {"role": "user", "content": "Submit your final verdict now with the submit_verdict tool, "
+                                            "consistent with the reasoning above."},
+            ],
+        )
+        for block in resp.content:
+            if getattr(block, "type", "") == "tool_use":
+                return dict(block.input)
+        raise ValueError("verdict repair returned no tool call")
 
 
 # --------------------------------------------------------------------------- the loop
@@ -106,7 +129,14 @@ def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None) ->
                 for chunk in active.stream(agent, scenario, user_msg):
                     buf += chunk
                     yield Event("token", agent.key, chunk)
-                narration, data = split_output(buf)
+                try:
+                    narration, data = split_output(buf)
+                except ValueError as parse_exc:  # includes json.JSONDecodeError
+                    if not hasattr(active, "repair"):
+                        raise
+                    narration = buf.split("<json>")[0].strip()
+                    yield Event("repair", agent.key, f"{parse_exc}")
+                    data = active.repair(agent, user_msg, narration)
                 break
             except Exception as exc:  # network error, bad JSON, missing key...
                 if attempt == 1 or active is fallback or not scenario.get("script"):

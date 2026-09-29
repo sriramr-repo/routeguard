@@ -137,6 +137,42 @@ JSON schema:
 
 AGENTS = [OPTIMIZER, CRITIC, ARBITER]
 
+# JSON schemas for each agent's verdict. Used to recover a verdict through a forced,
+# schema-validated tool call if the free-text <json> block is missing or malformed.
+_INT, _STR, _BOOL = {"type": "integer"}, {"type": "string"}, {"type": "boolean"}
+VERDICT_SCHEMAS = {
+    "optimizer": {
+        "type": "object",
+        "properties": {"route_id": _STR, "transit_days": _INT, "est_cost_usd": _INT,
+                       "meets_deadline": _BOOL, "rationale": _STR},
+        "required": ["route_id", "transit_days", "est_cost_usd", "meets_deadline", "rationale"],
+    },
+    "critic": {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": ["REJECT", "CONDITIONAL", "APPROVE"]},
+            "risk_score": _INT,
+            "flags": {"type": "array", "items": {
+                "type": "object",
+                "properties": {
+                    "severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM"]},
+                    "category": _STR, "title": _STR, "detail": _STR, "evidence": _STR},
+                "required": ["severity", "category", "title", "detail", "evidence"]}},
+        },
+        "required": ["verdict", "risk_score", "flags"],
+    },
+    "arbiter": {
+        "type": "object",
+        "properties": {
+            "decision": {"type": "string", "enum": ["PIVOT", "PROCEED", "HOLD"]},
+            "final_route_id": _STR, "transit_days": _INT, "est_cost_usd": _INT,
+            "residual_risk_score": _INT, "meets_deadline": _BOOL,
+            "mitigations": {"type": "array", "items": _STR}, "summary": _STR},
+        "required": ["decision", "final_route_id", "transit_days", "est_cost_usd",
+                     "residual_risk_score", "meets_deadline", "mitigations", "summary"],
+    },
+}
+
 
 def _routes_block(scenario: dict) -> str:
     lines = []

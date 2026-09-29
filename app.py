@@ -513,6 +513,8 @@ else:
             visible = buf.split("<json>")[0]
             status = "alert" if ev.agent == "critic" and len(visible) > 40 else "thinking"
             panel_ph[ev.agent].markdown(safe(agent_panel(ev.agent, visible, None, status, scenario)), unsafe_allow_html=True)
+        elif ev.type == "repair":
+            st.toast(f"{AGENT_BY_KEY[ev.agent].name}: verdict block malformed, recovered via structured call.", icon="🔧")
         elif ev.type == "fallback":
             st.toast(f"Live call failed for {ev.agent}; switched to replay.", icon="⚠️")
             buf = ""

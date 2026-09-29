@@ -69,7 +69,7 @@ h1.rg-title {font-size: 2.1rem; margin: 0; letter-spacing: -0.02em;}
                 animation: rgpulse 1.1s ease-in-out infinite;}
 .rg-banner.green {background:linear-gradient(90deg,#14532d,#052e16); border:1px solid #22c55e;}
 .rg-banner.blue {background:linear-gradient(90deg,#1e3a8a,#0b1a3d); border:1px solid #3b82f6;}
-.rg-kpis {display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; margin-top:6px;}
+.rg-kpis {display:grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:10px; margin-top:6px;}
 .rg-kpi {background:#111a2e; border:1px solid #1e293b; border-radius:12px; padding:10px 12px;}
 .rg-kpi .k {color:#94a3b8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em;}
 .rg-kpi .v {font-size:1.35rem; font-weight:700;}
@@ -261,7 +261,8 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
             lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs], mode="markers",
             marker=dict(size=38, color="rgba(239,68,68,0.25)"), showlegend=False, hoverinfo="skip"))
         fig.add_trace(go.Scattergeo(
-            lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs], mode="markers+text",
+            lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs],
+            mode="markers+text" if len(hs) <= 4 else "markers",  # many hotspots: labels on hover
             marker=dict(size=13, color="#ef4444", symbol="x", line=dict(width=1, color="white")),
             text=[f"⚠ {h['label']}" for h in hs], textposition=[h.get("pos", "bottom right") for h in hs],
             textfont=dict(color="#fca5a5", size=12), name="Risk hotspots", hoverinfo="text"))

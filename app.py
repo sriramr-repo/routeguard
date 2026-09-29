@@ -142,6 +142,9 @@ def result_card(key: str, d: dict, scenario: dict) -> str:
 def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
     """stage 0: nothing, 1: optimizer route, 2: critic hotspots (route red), 3: arbiter route."""
     fig = go.Figure()
+    # an invisible geo trace so the world map renders even before any route exists
+    fig.add_trace(go.Scattergeo(lat=[0], lon=[0], mode="markers", marker=dict(size=0, opacity=0),
+                                showlegend=False, hoverinfo="skip"))
     routes = scenario["routes"]
 
     def draw(route_id: str, color: str, width: float, opacity: float, name: str):

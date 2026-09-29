@@ -1,0 +1,43 @@
+locode,name,country,lat,lon,aliases
+TWKHH,Kaohsiung,TW,22.61,120.28,
+SGSIN,Singapore,SG,1.26,103.84,
+LKCMB,Colombo,LK,6.95,79.85,
+NLRTM,Rotterdam,NL,51.95,4.10,maasvlakte
+EGPSD,Port Said,EG,31.26,32.30,
+ZACPT,Cape Town,ZA,-33.90,18.43,
+MUPLU,Port Louis,MU,-20.16,57.50,
+MAPTM,Tanger Med,MA,35.88,-5.50,tangier|tanger
+DEHAM,Hamburg,DE,53.54,9.97,
+AEJEA,Jebel Ali,AE,25.01,55.06,dubai
+IRBND,Bandar Abbas,IR,27.15,56.20,shahid rajaee
+GEPTI,Poti,GE,42.15,41.67,
+,Baku (Alat),AZ,39.95,49.40,baku|alat
+,Aktau,KZ,43.65,51.20,
+,Tashkent,UZ,41.30,69.24,
+,Mashhad,IR,36.30,59.60,
+BEANR,Antwerp,BE,51.27,4.35,antwerpen|anvers
+PACTB,Cristobal,PA,9.35,-79.92,cristóbal|colon|colón
+PABLB,Balboa,PA,8.95,-79.57,
+USLAX,Los Angeles,US,33.73,-118.26,
+USLGB,Long Beach,US,33.75,-118.21,
+USHOU,Houston,US,29.73,-95.00,
+USSAV,Savannah,US,32.08,-81.09,
+USNYC,New York,US,40.67,-74.04,newark
+CNSHA,Shanghai,CN,31.23,121.80,yangshan
+CNNGB,Ningbo,CN,29.87,121.88,ningbo-zhoushan
+CNYTN,Yantian,CN,22.57,114.27,shenzhen
+CNLYG,Lianyungang,CN,34.74,119.45,
+HKHKG,Hong Kong,HK,22.30,114.17,
+KRPUS,Busan,KR,35.10,129.04,pusan
+JPTYO,Tokyo,JP,35.62,139.78,
+INNSA,Nhava Sheva,IN,18.95,72.95,jawaharlal nehru|jnpt|mumbai
+OMSLL,Salalah,OM,16.95,54.00,
+SAJED,Jeddah,SA,21.48,39.17,
+GRPIR,Piraeus,GR,37.94,23.63,
+ESALG,Algeciras,ES,36.13,-5.44,
+ESVLC,Valencia,ES,39.44,-0.32,
+ITGOA,Genoa,IT,44.40,8.92,genova
+FRLEH,Le Havre,FR,49.48,0.11,
+GBFXT,Felixstowe,GB,51.95,1.31,
+BRSSZ,Santos,BR,-23.96,-46.30,
+MYPKG,Port Klang,MY,3.00,101.39,

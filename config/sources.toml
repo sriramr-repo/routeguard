@@ -1,0 +1,83 @@
+# RouteGuard data sources.
+#
+# This file ships pointing at the SAMPLE files in examples/ so the connected-data
+# mode works offline. Swap any `url` for a live endpoint (see
+# config/sources.production.example.toml). `url` accepts a local path (relative to
+# the repo root) or an http(s) URL. API keys are read from environment variables
+# named by `api_key_env` (on Streamlit Cloud, put them in Secrets).
+
+[settings]
+max_bulletins = 25
+
+# ---------------------------------------------------------------- carrier schedules & rates
+[[routes]]
+type = "route_csv"
+name = "Route library / rate sheet (sample)"
+url = "examples/carriers/routes.csv"
+
+[[routes]]
+type = "dcsa"
+name = "Carrier schedules - DCSA point-to-point (sample)"
+url = "examples/carriers/dcsa_point_to_point_sample.json"
+rate_sheet = "examples/carriers/rate_sheet.csv"
+
+# ---------------------------------------------------------------- maritime security advisories
+[[intel]]
+type = "rss"
+name = "Maritime security advisories (sample)"
+category = "Security"
+url = "examples/feeds/maritime_security.xml"
+max_age_days = 3650          # sample items are fixed-date; use ~30 for live feeds
+
+# ---------------------------------------------------------------- canal & port authority notices
+[[intel]]
+type = "rss"
+name = "Canal & port authority notices (sample, Atom)"
+category = "Canal/Port"
+url = "examples/feeds/port_notices.xml"
+max_age_days = 3650
+
+[[intel]]
+type = "json"
+name = "Canal authority notices (sample, JSON API)"
+category = "Canal/Port"
+url = "examples/feeds/canal_notices.json"
+items_path = "notices"
+fields = { title = "headline", summary = "body", time = "published", link = "url" }
+max_age_days = 3650
+
+# ---------------------------------------------------------------- sanctions lists
+[[intel]]
+type = "sanctions_list"
+name = "OFAC SDN list (sample)"
+format = "ofac_sdn_csv"
+url = "examples/sanctions/ofac_sdn_sample.csv"
+
+[[intel]]
+type = "sanctions_list"
+name = "EU consolidated list (sample)"
+format = "eu_fsf_csv"
+url = "examples/sanctions/eu_sample.csv"
+
+[[intel]]
+type = "sanctions_list"
+name = "UK consolidated list (sample)"
+format = "uk_csv"
+url = "examples/sanctions/uk_sample.csv"
+
+[[intel]]
+type = "country_embargo"
+name = "Comprehensive-embargo jurisdictions (configure with counsel)"
+countries = { IR = "comprehensive US sanctions (OFAC Iran program) and EU/UK restrictive measures", KP = "comprehensive UN/US/EU/UK sanctions", CU = "US embargo (OFAC Cuba program)" }
+
+# ---------------------------------------------------------------- export-control lists
+[[intel]]
+type = "export_rules"
+name = "Export-control classification rules (sample)"
+url = "examples/export_control_rules.csv"
+
+[[intel]]
+type = "trade_gov_csl"
+name = "US Consolidated Screening List (trade.gov API)"
+api_key_env = "TRADE_GOV_API_KEY"
+enabled = false              # set true once TRADE_GOV_API_KEY is configured

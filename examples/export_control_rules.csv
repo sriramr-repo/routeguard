@@ -1,0 +1,6 @@
+hs_prefix,keywords,control_code,regime,licence_required,destinations,note
+8457,5-axis|five-axis,2B001,EU Dual-Use Annex I (SAMPLE mapping),yes,*,Machining centres meeting positioning-accuracy thresholds; classify with your export-control team.
+8458,5-axis|five-axis,2B001,EU Dual-Use Annex I (SAMPLE mapping),yes,*,Turning machines with multi-axis contouring.
+,radiation-hardened|rad-hard,3A001,EU Dual-Use Annex I (SAMPLE mapping),yes,*,Radiation-hardened integrated circuits.
+,unmanned aerial|uav|drone,9A012,EU Dual-Use Annex I (SAMPLE mapping),yes,*,Unmanned aerial vehicles and parts.
+8507,,UN3480,Dangerous goods (IMDG Class 9) - not an export control,no,*,Lithium-ion batteries: DG declaration and state-of-charge rules apply; not a licence requirement.

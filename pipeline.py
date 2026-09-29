@@ -57,6 +57,8 @@ class ReplayBackend:
         self.delay = 0.035 / max(speed, 0.05)
 
     def stream(self, agent: Agent, scenario: dict, user_msg: str) -> Iterator[str]:
+        if not scenario.get("script"):
+            raise RuntimeError("this scenario has no replay script (connected-data runs need the Live engine)")
         script = scenario["script"][agent.key]
         text = script["narration"].strip()
         # stream word by word, with a beat after each sentence
@@ -107,7 +109,7 @@ def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None) ->
                 narration, data = split_output(buf)
                 break
             except Exception as exc:  # network error, bad JSON, missing key...
-                if attempt == 1 or active is fallback:
+                if attempt == 1 or active is fallback or not scenario.get("script"):
                     raise
                 yield Event("fallback", agent.key, f"{type(exc).__name__}: {exc}")
                 active = fallback
@@ -126,12 +128,29 @@ def _cli() -> None:
 
     p = argparse.ArgumentParser(description="Run the RouteGuard swarm in the terminal")
     p.add_argument("--scenario", default="red_sea", choices=list(SCENARIOS))
+    p.add_argument("--manifest", help="run on your own manifest (JSON/CSV) using connected sources; implies --live")
+    p.add_argument("--sources", default="config/sources.toml", help="source config for --manifest")
+    p.add_argument("--ingest-only", action="store_true", help="with --manifest: print ingested data and exit")
     p.add_argument("--live", action="store_true", help="call the Claude API instead of replay")
     p.add_argument("--speed", type=float, default=20.0)
     args = p.parse_args()
 
+    if args.manifest:
+        from sources import build_scenario, load_manifest
+
+        with open(args.manifest, encoding="utf-8") as f:
+            scenario, report = build_scenario(load_manifest(f.read(), args.manifest), args.sources)
+        for r in report:
+            print(f"  [{r['status']}] {r['source']}: {r['items']} item(s)")
+        for b in scenario["intel"]:
+            print(f"  [{b['id']}] {b['severity']}: {b['text'][:140]}")
+        if args.ingest_only:
+            print(json.dumps({"routes": list(scenario["routes"]), "hotspots": scenario["hotspots"]}, indent=2))
+            return
+        args.live = True
+    else:
+        scenario = SCENARIOS[args.scenario]
     backend = ClaudeBackend() if args.live else ReplayBackend(speed=args.speed)
-    scenario = SCENARIOS[args.scenario]
     print(f"\n=== {scenario['title']} ===  [{backend.name}]\n")
     for ev in run_swarm(scenario, backend):
         if ev.type == "agent_start":

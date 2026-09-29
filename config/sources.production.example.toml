@@ -1,0 +1,81 @@
+# Example production wiring. Copy to config/sources.toml and fill in endpoints you
+# are licensed to use. VERIFY every URL and format against the publisher's current
+# documentation before relying on it; publishers change formats and locations.
+
+[settings]
+max_bulletins = 30
+
+# Carrier schedules: any carrier exposing the DCSA Commercial Schedules API.
+[[routes]]
+type = "dcsa"
+name = "Carrier A schedules (DCSA)"
+url = "https://<carrier-api-host>/commercial-schedules/v1"
+api_key_env = "CARRIER_A_API_KEY"
+api_key_header = "Consumer-Key"              # header name varies by carrier
+rate_sheet = "data/contract_rates.csv"       # your contracted / spot rates
+
+# Your own route library (e.g. exported from the TMS) still works alongside.
+[[routes]]
+type = "route_csv"
+name = "Internal route library"
+url = "data/route_library.csv"
+
+# Sanctions lists (official downloads).
+[[intel]]
+type = "sanctions_list"
+name = "OFAC SDN list"
+format = "ofac_sdn_csv"
+url = "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV"
+
+[[intel]]
+type = "sanctions_list"
+name = "EU Financial Sanctions consolidated list"
+format = "eu_fsf_csv"
+url = "https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content?token=<your-token>"
+
+[[intel]]
+type = "sanctions_list"
+name = "UK sanctions list"
+format = "uk_csv"                            # or generic_csv with parser_options
+url = "<UK sanctions list CSV download URL>"
+
+[[intel]]
+type = "country_embargo"
+name = "Comprehensive-embargo jurisdictions"
+countries = { IR = "OFAC Iran program; EU/UK measures", KP = "UN/US/EU/UK sanctions", CU = "OFAC Cuba program" }
+
+# Export controls.
+[[intel]]
+type = "export_rules"
+name = "Classification rules (from your export-control team)"
+url = "data/export_control_rules.csv"
+
+[[intel]]
+type = "trade_gov_csl"
+name = "US Consolidated Screening List"
+api_key_env = "TRADE_GOV_API_KEY"
+
+# Maritime security advisories: any RSS/Atom or JSON publisher you subscribe to
+# (e.g. UKMTO, MARAD MSCI, JMIC, IMB Piracy Reporting Centre, a commercial risk feed).
+[[intel]]
+type = "rss"
+name = "Maritime security advisories"
+category = "Security"
+url = "<advisory feed URL>"
+max_age_days = 30
+
+# Canal & port authority notices.
+[[intel]]
+type = "rss"
+name = "Canal authority advisories"
+category = "Canal/Port"
+url = "<canal authority notices feed URL>"
+
+[[intel]]
+type = "json"
+name = "Port community system notices"
+category = "Canal/Port"
+url = "<port API URL>"
+api_key_env = "PORT_API_KEY"
+items_path = "data.items"
+fields = { title = "title", summary = "description", time = "publishedAt", link = "url" }

@@ -1,0 +1,16 @@
+{
+  "booking_ref": "BK-77310",
+  "shipper_name": "Schwarzwald Werkzeugmaschinen GmbH (SAMPLE)",
+  "consignee_name": "Tashkent Precision Components LLC (SAMPLE)",
+  "notify_party": "Gulf Link Freight FZE",
+  "port_of_loading": "Hamburg",
+  "place_of_delivery": "Tashkent",
+  "destination_country": "UZ",
+  "commodity": "3 x 5-axis CNC machining centres + spindle spares",
+  "hs_code": "8457.10",
+  "equipment": "3 x 40' flat rack, 2 x 40' HC",
+  "invoice_value": "6,400,000",
+  "incoterms": "DAP Tashkent",
+  "deadline_days": 45,
+  "export_licence": "None filed"
+}

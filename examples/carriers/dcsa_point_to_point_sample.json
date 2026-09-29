@@ -1,0 +1,30 @@
+[
+  {"solutionNumber": 1, "transitTime": 38,
+   "placeOfReceipt": {"location": {"UNLocationCode": "CNSHA"}},
+   "placeOfDelivery": {"location": {"UNLocationCode": "NLRTM"}},
+   "legs": [
+     {"sequenceNumber": 1, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE3 Cape Express"}]},
+      "departure": {"location": {"UNLocationCode": "CNSHA"}, "dateTime": "2026-10-03T08:00:00Z"},
+      "arrival": {"location": {"UNLocationCode": "SGSIN"}, "dateTime": "2026-10-09T08:00:00Z"}},
+     {"sequenceNumber": 2, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE3 Cape Express"}]},
+      "departure": {"location": {"UNLocationCode": "SGSIN"}, "dateTime": "2026-10-10T08:00:00Z"},
+      "arrival": {"location": {"locationName": "Cape of Good Hope"}, "dateTime": "2026-10-24T08:00:00Z"}},
+     {"sequenceNumber": 3, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE3 Cape Express"}]},
+      "departure": {"location": {"locationName": "Cape of Good Hope"}, "dateTime": "2026-10-24T08:00:00Z"},
+      "arrival": {"location": {"UNLocationCode": "NLRTM"}, "dateTime": "2026-11-10T08:00:00Z"}}
+   ]},
+  {"solutionNumber": 2, "transitTime": 29,
+   "placeOfReceipt": {"location": {"UNLocationCode": "CNSHA"}},
+   "placeOfDelivery": {"location": {"UNLocationCode": "NLRTM"}},
+   "legs": [
+     {"sequenceNumber": 1, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE7 Suez"}]},
+      "departure": {"location": {"UNLocationCode": "CNSHA"}, "dateTime": "2026-10-02T08:00:00Z"},
+      "arrival": {"location": {"UNLocationCode": "SGSIN"}, "dateTime": "2026-10-08T08:00:00Z"}},
+     {"sequenceNumber": 2, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE7 Suez"}]},
+      "departure": {"location": {"UNLocationCode": "SGSIN"}, "dateTime": "2026-10-09T08:00:00Z"},
+      "arrival": {"location": {"UNLocationCode": "EGPSD"}, "dateTime": "2026-10-22T08:00:00Z"}},
+     {"sequenceNumber": 3, "transport": {"modeOfTransport": "VESSEL", "servicePartners": [{"carrierCode": "SMPL", "carrierServiceName": "SAMPLE AE7 Suez"}]},
+      "departure": {"location": {"UNLocationCode": "EGPSD"}, "dateTime": "2026-10-23T08:00:00Z"},
+      "arrival": {"location": {"UNLocationCode": "NLRTM"}, "dateTime": "2026-10-31T08:00:00Z"}}
+   ]}
+]

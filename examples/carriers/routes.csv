@@ -1,0 +1,5 @@
+route_id,origin,destination,name,via,modes,transit_days,est_cost_usd,carrier,parties,notes
+GULF_IRAN,Hamburg,Tashkent,Gulf gateway via Bandar Abbas,Hamburg|English Channel|Strait of Gibraltar|Suez Canal|Bab el-Mandeb|Gulf of Aden|Gulf of Oman|Jebel Ali|Bandar Abbas|Mashhad|Tashkent,sea|sea|sea|sea|sea|sea|sea|sea|land|land,27,118000,SAMPLE Ocean Line,Hormozgan Feeder Lines Co,Transship Jebel Ali; feeder to Bandar Abbas; rail via Sarakhs
+MIDDLE_CORRIDOR,Hamburg,Tashkent,Trans-Caspian Middle Corridor,Hamburg|English Channel|Strait of Gibraltar|Bosporus|Poti|Baku (Alat)|Aktau|Tashkent,sea|sea|sea|sea|land|sea|land,36,164000,SAMPLE Caspian Multimodal,,Sea to Poti; rail to Alat; Caspian ferry; rail via Kazakhstan
+AE_SUEZ_CSV,Shanghai,Rotterdam,Asia-Europe via Suez (rate sheet),Shanghai|Singapore|Colombo|Bab el-Mandeb|Suez Canal|Strait of Gibraltar|Rotterdam,,30,520000,SAMPLE Ocean Line,,Weekly loop; Colombo transshipment
+AE_CAPE_CSV,Shanghai,Rotterdam,Asia-Europe via Cape (rate sheet),Shanghai|Singapore|Cape of Good Hope|Strait of Gibraltar|Rotterdam,,41,610000,SAMPLE Ocean Line,,Extra ~3,500 nm vs Suez

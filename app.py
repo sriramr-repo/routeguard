@@ -16,6 +16,13 @@ import streamlit as st
 from agents import AGENTS
 from pipeline import ClaudeBackend, ReplayBackend, run_swarm
 from scenarios import SCENARIOS
+from sources import build_scenario, load_manifest
+
+SOURCES_CONFIG = os.environ.get("ROUTEGUARD_SOURCES", "config/sources.toml")
+SAMPLE_MANIFESTS = {
+    "Sample: CNC machines, Hamburg → Tashkent": "examples/manifests/cnc_tashkent.json",
+    "Sample: EV batteries, Shanghai → Rotterdam": "examples/manifests/batteries_rotterdam.csv",
+}
 
 st.set_page_config(page_title="RouteGuard", page_icon="🛰️", layout="wide")
 
@@ -72,13 +79,29 @@ h1.rg-title {font-size: 2.1rem; margin: 0; letter-spacing: -0.02em;}
 """, unsafe_allow_html=True)
 
 
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:
+    pass
+
+
+@st.cache_data(ttl=900, show_spinner="Ingesting connected sources…")
+def ingest(manifest_text: str, filename: str, config_path: str, config_mtime: float):
+    manifest = load_manifest(manifest_text, filename)
+    return build_scenario(manifest, config_path)
+
+
 # ------------------------------------------------------------------ helpers
 def safe(s: str) -> str:
     """Streamlit markdown renders $...$ as LaTeX; entity-encode dollars so prices stay text."""
     return s.replace("$", "&#36;")
 
 
-def money(v: int) -> str:
+def money(v) -> str:
+    if not isinstance(v, (int, float)):
+        return "n/a"
     return f"${v / 1_000_000:.1f}M" if v >= 1_000_000 else f"${v / 1000:,.0f}k"
 
 
@@ -165,6 +188,15 @@ def build_map(scenario: dict, stage: int, ctx: dict) -> go.Figure:
             textfont=dict(color="#e2e8f0", size=11), showlegend=False, hoverinfo="skip", opacity=opacity))
 
     opt = ctx.get("optimizer", {}).get("route_id")
+    if stage == 0 and scenario.get("live_data"):
+        for rid in routes:
+            draw(rid, "#64748b", 2.0, 0.8, "Candidate routes")
+        hs = scenario["hotspots"]
+        if hs:
+            fig.add_trace(go.Scattergeo(
+                lat=[h["lat"] for h in hs], lon=[h["lon"] for h in hs], mode="markers",
+                marker=dict(size=11, color="#f59e0b", line=dict(width=1, color="white")),
+                text=[h["label"] for h in hs], name="Intel on these lanes", hoverinfo="text"))
     if stage == 1 and opt:
         draw(opt, "#3b82f6", 3.5, 1.0, "Optimizer proposal")
     if stage >= 2 and opt:
@@ -238,28 +270,52 @@ def kpis(ctx: dict, scenario: dict) -> str:
 with st.sidebar:
     st.markdown("### 🛰️ RouteGuard")
     st.caption("Adversarial three-agent routing swarm")
-    scen_key = st.radio(
-        "Scenario", list(SCENARIOS),
-        format_func=lambda k: SCENARIOS[k]["title"], key="scenario")
+    data_mode = st.radio("Data", ["Curated demo scenarios", "Connected sources (your shipment)"],
+                         help="Connected mode loads a shipper manifest and pulls intel from the sources "
+                              f"configured in {SOURCES_CONFIG}.")
+    connected = data_mode.startswith("Connected")
     api_key = get_api_key()
-    engine = st.radio(
-        "Engine", ["Replay (offline, demo-safe)", "Live (Claude API)"],
-        help="Replay streams pre-recorded agent output: identical every run, no network. "
-             "Live calls Claude with the same prompts; if a call fails it falls back to replay.")
+    if not connected:
+        scen_key = st.radio("Scenario", list(SCENARIOS), format_func=lambda k: SCENARIOS[k]["title"], key="scenario")
+        engine = st.radio(
+            "Engine", ["Replay (offline, demo-safe)", "Live (Claude API)"],
+            help="Replay streams pre-recorded agent output: identical every run, no network. "
+                 "Live calls Claude with the same prompts; if a call fails it falls back to replay.")
+    else:
+        up = st.file_uploader("Shipper manifest (JSON or CSV)", type=["json", "csv"])
+        sample = st.selectbox("…or use a sample manifest", list(SAMPLE_MANIFESTS), disabled=up is not None)
+        engine = "Live (Claude API)"
+        st.caption("Connected-data runs always use the Live engine.")
     if engine.startswith("Live"):
-        typed = st.text_input("Anthropic API key", type="password", value="" if api_key else "",
+        typed = st.text_input("Anthropic API key", type="password", value="",
                               placeholder="set via secrets or paste here")
         api_key = typed or api_key
         model = st.text_input("Model", value=os.environ.get("ROUTEGUARD_MODEL", "claude-sonnet-5-5"))
         if not api_key:
-            st.warning("No API key found: the run will fall back to replay.")
+            st.warning("No API key found." + ("" if connected else " The run will fall back to replay."))
     else:
         model = None
     speed = st.slider("Stream speed", 0.5, 4.0, 1.0, 0.25, help="Replay typing speed")
     st.divider()
-    st.caption("Intel bulletins are simulated for this demo. No live scraping.")
+    st.caption("Connected mode ships wired to SAMPLE source files; point config/sources.toml at live feeds."
+               if connected else "Intel bulletins in demo scenarios are simulated. No live scraping.")
 
-scenario = SCENARIOS[scen_key]
+source_report: list[dict] = []
+if connected:
+    if up is not None:
+        man_text, man_name = up.getvalue().decode("utf-8-sig"), up.name
+    else:
+        path = SAMPLE_MANIFESTS[sample]
+        man_text, man_name = open(path, encoding="utf-8").read(), path
+    try:
+        cfg_mtime = os.path.getmtime(SOURCES_CONFIG)
+        scenario, source_report = ingest(man_text, man_name, SOURCES_CONFIG, cfg_mtime)
+    except Exception as exc:
+        st.error(f"Could not build this shipment: {exc}")
+        st.stop()
+    scen_key = "live_" + str(abs(hash(man_text)) % 10**8)
+else:
+    scenario = SCENARIOS[scen_key]
 m = scenario["manifest"]
 
 # reset stored results when scenario changes
@@ -273,22 +329,37 @@ st.markdown(safe('<h1 class="rg-title">🛰️ RouteGuard</h1>'
             'One arbitrates. A safe, optimal route in seconds.</p>'), unsafe_allow_html=True)
 
 st.markdown(safe(f"""
-<div style="margin-bottom:8px"><span class="rg-pill">SHIPMENT {m['shipment_id']}</span>
-<span class="rg-pill">{html.escape(scenario['title'].upper())}</span></div>
+<div style="margin-bottom:8px"><span class="rg-pill">SHIPMENT {html.escape(str(m.get('shipment_id', '')))}</span>
+<span class="rg-pill">{'CONNECTED SOURCES' if scenario.get('live_data') else html.escape(scenario['title'].upper())}</span></div>
 <div class="rg-manifest">
- <div class="rg-m"><div class="k">Lane</div><div class="v">{html.escape(m['origin'])} → {html.escape(m['destination'])}</div></div>
- <div class="rg-m"><div class="k">Cargo</div><div class="v">{html.escape(m['cargo'])}</div></div>
+ <div class="rg-m"><div class="k">Lane</div><div class="v">{html.escape(str(m['origin']))} → {html.escape(str(m['destination']))}</div></div>
+ <div class="rg-m"><div class="k">Cargo</div><div class="v">{html.escape(str(m['cargo']))}</div></div>
  <div class="rg-m"><div class="k">Declared value</div><div class="v">{money(m['declared_value_usd'])}</div></div>
- <div class="rg-m"><div class="k">Deadline</div><div class="v">{m['deadline_days']} days · {html.escape(m['containers'])}</div></div>
+ <div class="rg-m"><div class="k">Deadline</div><div class="v">{html.escape(str(m.get('deadline_days', 'n/a')))} days · {html.escape(str(m.get('containers', 'n/a')))}</div></div>
 </div>"""), unsafe_allow_html=True)
 
-with st.expander("📡 Intelligence feed (simulated) and full manifest"):
+if source_report:
+    ok = sum(1 for r in source_report if r["status"] == "ok")
+    with st.expander(f"🔌 Connected sources: {ok}/{len(source_report)} OK · "
+                     f"{len(scenario['routes'])} candidate routes · {len(scenario['intel'])} relevant bulletins"):
+        st.dataframe(
+            [{"Source": r["source"], "Type": r["kind"], "Status": r["status"], "Items": r["items"],
+              "ms": r.get("ms", "")} for r in source_report],
+            use_container_width=True, hide_index=True)
+        st.caption(f"Config: {SOURCES_CONFIG}. Failing sources are skipped, never fatal.")
+
+with st.expander("📡 Intelligence feed " + ("(from connected sources)" if scenario.get("live_data") else "(simulated)")
+                 + " and full manifest"):
     c1, c2 = st.columns([3, 2])
     with c1:
         for b in scenario["intel"]:
             st.markdown(safe(f'<div class="rg-intel"><b style="color:{SEV_COLOR.get(b["severity"], "#94a3b8")}">'
-                f'[{b["id"]}] {b["severity"]}</b> · {b["time"]} · <i>{html.escape(b["source"])}</i><br>'
-                f'{html.escape(b["text"])}</div>'), unsafe_allow_html=True)
+                f'[{b["id"]}] {b["severity"]}</b> · {html.escape(str(b.get("time", "")))} · <i>{html.escape(b["source"])}</i><br>'
+                f'{html.escape(b["text"])}'
+                + (f' <a href="{html.escape(b["url"])}" target="_blank">source</a>' if b.get("url") else "")
+                + '</div>'), unsafe_allow_html=True)
+        if not scenario["intel"]:
+            st.caption("No relevant bulletins for this shipment's routes.")
     with c2:
         st.json(m)
 
@@ -327,6 +398,10 @@ else:
     # ---------------------------------------------------------- live run
     replay = ReplayBackend(speed=speed)
     backend = replay
+    if connected and not api_key:
+        render_static(None)
+        st.error("Connected-data runs need the Live engine: add ANTHROPIC_API_KEY in Secrets or paste it in the sidebar.")
+        st.stop()
     if engine.startswith("Live"):
         try:
             backend = ClaudeBackend(model=model, api_key=api_key) if api_key else replay
@@ -348,7 +423,13 @@ else:
     show_map(0)
     buf = ""
     stage = 0
-    for ev in run_swarm(scenario, backend, fallback=replay):
+    def _guard(gen):
+        try:
+            yield from gen
+        except Exception as exc:
+            st.error(f"The swarm stopped: {type(exc).__name__}: {exc}")
+
+    for ev in _guard(run_swarm(scenario, backend, fallback=replay)):
         if ev.type == "agent_start":
             buf = ""
             stage = {"optimizer": 1, "critic": 2, "arbiter": 3}[ev.agent]

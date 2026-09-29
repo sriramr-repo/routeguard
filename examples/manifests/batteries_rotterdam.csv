@@ -1,0 +1,13 @@
+field,value
+shipment_id,BK-80412
+shipper,Yangtze Cell Technology Co Ltd (SAMPLE)
+consignee,Rhine E-Mobility BV (SAMPLE)
+origin,Shanghai
+destination,Rotterdam
+cargo,Lithium-ion battery modules for EV assembly (UN3480 Class 9)
+hs_code,8507.60
+containers,8 x 40' HC
+declared_value_usd,19500000
+incoterm,CIF Rotterdam
+deadline_days,40
+insurance,All-risks cargo; war & strikes subject to listed-area exclusions

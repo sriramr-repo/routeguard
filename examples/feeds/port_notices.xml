@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Canal and Port Authority Notices (SAMPLE FEED - fictional items for testing)</title>
+<entry><title>Suez Canal: 72-hour tug and pilot stoppage announced</title>
+<summary>SAMPLE: Northbound convoy slots expected to slip 3-5 days from Thursday.</summary>
+<updated>2026-09-28T08:00:00Z</updated><link href="https://example.org/notices/suez-4471"/></entry>
+<entry><title>Caspian ferry Alat-Aktau: waiting times 2-3 days</title>
+<summary>SAMPLE: Ro-ro ferry capacity constrained; bookings advised 7 days ahead.</summary>
+<updated>2026-09-27T10:00:00Z</updated><link href="https://example.org/notices/caspian-112"/></entry>
+<entry><title>Rotterdam: yard density high at Maasvlakte terminals</title>
+<summary>SAMPLE: Import dwell times rising; expect 1-2 day delays for container pick-up.</summary>
+<updated>2026-09-26T16:00:00Z</updated><link href="https://example.org/notices/rtm-889"/></entry>
+<entry><title>Santos: berth maintenance completed</title>
+<summary>SAMPLE: Normal operations resumed.</summary>
+<updated>2026-09-25T12:00:00Z</updated><link href="https://example.org/notices/ssz-12"/></entry>
+</feed>

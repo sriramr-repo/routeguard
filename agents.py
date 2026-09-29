@@ -141,16 +141,26 @@ AGENTS = [OPTIMIZER, CRITIC, ARBITER]
 def _routes_block(scenario: dict) -> str:
     lines = []
     for r in scenario["routes"].values():
+        days = f"{r['transit_days']} days" if r.get("transit_days") is not None else "transit n/a"
+        cost = f"~${r['est_cost_usd']:,}" if r.get("est_cost_usd") is not None else "no rate on file"
+        extra = ""
+        if r.get("carrier"):
+            extra += f" | carrier: {r['carrier']}"
+        if r.get("parties"):
+            extra += f" | parties: {', '.join(r['parties'])}"
         lines.append(
             f"- route_id={r['id']} | {r['name']} | via {', '.join(r['via'])} | "
-            f"{r['transit_days']} days | ~${r['est_cost_usd']:,} | notes: {r['notes']}"
+            f"{days} | {cost}{extra} | notes: {r.get('notes', '')}"
         )
     return "\n".join(lines)
 
 
 def _intel_block(scenario: dict) -> str:
+    if not scenario["intel"]:
+        return "(no relevant bulletins from any connected source)"
     return "\n".join(
-        f"[{b['id']}] {b['time']} | {b['source']} | {b['severity']} | {b['text']}"
+        f"[{b['id']}] {b.get('time', '')} | {b['source']} | {b.get('category', '')} | {b['severity']} | {b['text']}"
+        + (f" | {b['url']}" if b.get("url") else "")
         for b in scenario["intel"]
     )
 

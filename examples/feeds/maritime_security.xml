@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>Maritime Security Advisories (SAMPLE FEED - fictional items for testing)</title>
+<item><title>Merchant vessel struck by one-way attack drone near Bab el-Mandeb</title>
+<description>SAMPLE: A container ship was struck 45 nm NW of Bab el-Mandeb; crew safe, fire contained. Threat level for the southern Red Sea remains SEVERE.</description>
+<pubDate>Mon, 28 Sep 2026 06:10:00 GMT</pubDate><link>https://example.org/advisories/0921</link></item>
+<item><title>Tanker seized by armed boarding party in Strait of Hormuz</title>
+<description>SAMPLE: Vessel boarded and diverted to territorial waters. Masters advised to report suspicious approaches.</description>
+<pubDate>Sun, 27 Sep 2026 14:00:00 GMT</pubDate><link>https://example.org/advisories/0920</link></item>
+<item><title>Piracy attack reported off Lome, Gulf of Guinea</title>
+<description>SAMPLE: Robbers boarded an anchored product tanker.</description>
+<pubDate>Sat, 26 Sep 2026 22:00:00 GMT</pubDate><link>https://example.org/advisories/0919</link></item>
+<item><title>Suspicious approach by skiffs in the Strait of Malacca</title>
+<description>SAMPLE: Two skiffs approached a bulk carrier and withdrew after alarm raised. No boarding.</description>
+<pubDate>Fri, 25 Sep 2026 03:30:00 GMT</pubDate><link>https://example.org/advisories/0918</link></item>
+<item><title>Old notice: exercise completed in the English Channel</title>
+<description>SAMPLE: Naval exercise completed without incident.</description>
+<pubDate>Mon, 02 Mar 2026 09:00:00 GMT</pubDate><link>https://example.org/advisories/0700</link></item>
+</channel></rss>

@@ -112,6 +112,88 @@ class ClaudeBackend:
         raise ValueError("verdict repair returned no tool call")
 
 
+class CrusoeBackend:
+    """Open-weight models on Crusoe Managed Inference (OpenAI-compatible API).
+
+    Same interface as ClaudeBackend: stream() for the agent's reasoning, repair() to
+    recover a missing or malformed verdict. Open models differ in what they support,
+    so repair() tries forced tool calling, then JSON-schema output, then JSON mode,
+    then a plain "JSON only" retry."""
+
+    name = "Live (Crusoe)"
+    BASE_URL = "https://api.crusoe.ai/v1"
+    DEFAULT_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+
+    def __init__(self, model: str | None = None, api_key: str | None = None,
+                 base_url: str | None = None):
+        from openai import OpenAI  # imported lazily so replay mode needs no SDK
+
+        self.client = OpenAI(api_key=api_key or os.environ.get("CRUSOE_API_KEY"),
+                             base_url=base_url or os.environ.get("CRUSOE_BASE_URL", self.BASE_URL))
+        self.model = model or os.environ.get("CRUSOE_MODEL", self.DEFAULT_MODEL)
+
+    def _messages(self, agent: Agent, user_msg: str) -> list[dict]:
+        return [{"role": "system", "content": agent.system_prompt},
+                {"role": "user", "content": user_msg}]
+
+    def stream(self, agent: Agent, scenario: dict, user_msg: str) -> Iterator[str]:
+        resp = self.client.chat.completions.create(
+            model=self.model, max_tokens=4000, temperature=0.3, stream=True,
+            messages=self._messages(agent, user_msg))
+        for chunk in resp:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    def repair(self, agent: Agent, user_msg: str, narration: str) -> dict:
+        schema = VERDICT_SCHEMAS[agent.key]
+        msgs = self._messages(agent, user_msg) + [
+            {"role": "assistant", "content": narration.strip() or "(reasoning omitted)"},
+            {"role": "user", "content": "Submit your final verdict now, consistent with the reasoning above. "
+                                        "Return only the JSON object, matching this schema: " + json.dumps(schema)}]
+        attempts = [
+            dict(tools=[{"type": "function", "function": {
+                "name": "submit_verdict", "description": f"Submit the {agent.name}'s final verdict.",
+                "parameters": schema}}],
+                 tool_choice={"type": "function", "function": {"name": "submit_verdict"}}),
+            dict(response_format={"type": "json_schema",
+                                  "json_schema": {"name": "verdict", "schema": schema}}),
+            dict(response_format={"type": "json_object"}),
+            dict(),
+        ]
+        errors = []
+        for extra in attempts:
+            try:
+                resp = self.client.chat.completions.create(
+                    model=self.model, max_tokens=3000, temperature=0, messages=msgs, **extra)
+                msg = resp.choices[0].message
+                calls = getattr(msg, "tool_calls", None) or []
+                raw = calls[0].function.arguments if calls else (msg.content or "")
+                data = _loads_lenient(raw)
+                missing = [k for k in schema.get("required", []) if k not in data]
+                if missing:
+                    raise ValueError(f"verdict missing {missing}")
+                return data
+            except Exception as exc:  # unsupported feature or bad output: try the next way
+                errors.append(f"{type(exc).__name__}: {str(exc)[:120]}")
+        raise ValueError("verdict repair failed: " + " | ".join(errors))
+
+
+def _loads_lenient(raw: str) -> dict:
+    """Parse a JSON object from model output that may carry fences or <json> tags."""
+    raw = raw.strip()
+    if "<json>" in raw or "```" in raw:
+        raw = re.sub(r"^```(?:json)?|```$", "", raw.split("<json>")[-1].replace("</json>", "").strip()).strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("no JSON object in output")
+    return json.loads(raw[start:end + 1])
+
+
+def make_live_backend(provider: str, model: str | None = None, api_key: str | None = None):
+    """'claude' or 'crusoe' -> a live backend."""
+    return (CrusoeBackend if provider == "crusoe" else ClaudeBackend)(model=model, api_key=api_key)
+
+
 # --------------------------------------------------------------------------- the loop
 
 def run_swarm(scenario: dict, backend, fallback: ReplayBackend | None = None,
@@ -213,7 +295,10 @@ def _cli() -> None:
     p.add_argument("--manifest", help="run on your own manifest (JSON/CSV) using connected sources; implies --live")
     p.add_argument("--sources", default="config/sources.toml", help="source config for --manifest")
     p.add_argument("--ingest-only", action="store_true", help="with --manifest: print ingested data and exit")
-    p.add_argument("--live", action="store_true", help="call the Claude API instead of replay")
+    p.add_argument("--live", action="store_true", help="call a live model instead of replay")
+    p.add_argument("--provider", default="claude", choices=["claude", "crusoe"],
+                   help="live model provider (crusoe = open models on Crusoe Managed Inference)")
+    p.add_argument("--model", help="override the provider's default model")
     p.add_argument("--speed", type=float, default=20.0)
     p.add_argument("--twist", action="store_true",
                    help="after the decision, inject the scenario's breaking-news twist and re-check")
@@ -234,7 +319,7 @@ def _cli() -> None:
         args.live = True
     else:
         scenario = SCENARIOS[args.scenario]
-    backend = ClaudeBackend() if args.live else ReplayBackend(speed=args.speed)
+    backend = make_live_backend(args.provider, args.model) if args.live else ReplayBackend(speed=args.speed)
     fallback = ReplayBackend(speed=args.speed)
     print(f"\n=== {scenario['title']} ===  [{backend.name}]\n")
     ctx = _print_run(run_swarm(scenario, backend, fallback), "FINAL")

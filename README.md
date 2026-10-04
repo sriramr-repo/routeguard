@@ -100,6 +100,19 @@ python -m unittest discover -s tests                                            
 
 ---
 
+### Crusoe (open-weight models)
+
+RouteGuard can run its three agents on open models hosted on [Crusoe Managed Inference](https://docs.crusoecloud.com/reference/inference), an OpenAI-compatible API. Pick **Live (Crusoe, open models)** in the sidebar and paste a Crusoe API key (Crusoe Console → Intelligence Foundry). The key stays in your session, or it can be saved in Secrets as `CRUSOE_API_KEY` behind the same owner passcode as the Anthropic key.
+
+```bash
+python pipeline.py --scenario red_sea --live --provider crusoe
+python pipeline.py --scenario embargo --live --provider crusoe --model <crusoe-model-id>
+```
+
+The default model is `meta-llama/Llama-3.3-70B-Instruct`; override it with `CRUSOE_MODEL` or the sidebar. Open models differ in what they support, so if a verdict comes back missing or malformed, `CrusoeBackend` recovers it by trying forced tool calling, then JSON-schema output, then JSON mode, then a plain "JSON only" retry.
+
+---
+
 ## Connect your own data
 
 The agents are source-agnostic. Every feed, list and API is converted by an adapter in `sources/` into one **bulletin** format (id, time, source, category, severity, text, url, location), the same format the Critic already cites. Which sources are on, and where they point, is set in **`config/sources.toml`**.

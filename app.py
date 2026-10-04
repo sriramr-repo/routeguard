@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from agents import AGENTS
-from pipeline import (ClaudeBackend, ReplayBackend, make_breaking_bulletin, recheck_scenario,
+from pipeline import (ClaudeBackend, make_live_backend, ReplayBackend, make_breaking_bulletin, recheck_scenario,
                       run_recheck, run_swarm)
 from scenarios import SCENARIOS
 from sources import build_scenario, load_manifest
@@ -95,7 +95,7 @@ h1.rg-title {font-size: 2.1rem; margin: 0; letter-spacing: -0.02em;}
 try:
     for _k, _v in st.secrets.items():
         # connector keys (e.g. TRADE_GOV_API_KEY) go to env; the Anthropic key never does
-        if isinstance(_v, str) and "anthropic" not in _k.lower() and not _v.strip().startswith("sk-ant-"):
+        if isinstance(_v, str) and not any(s in _k.lower() for s in ("anthropic", "crusoe")) and not _v.strip().startswith("sk-ant-"):
             os.environ.setdefault(_k, _v)
 except Exception:
     pass
@@ -137,9 +137,20 @@ def owner_passcode() -> str | None:
     return os.environ.get("ROUTEGUARD_PASSCODE")
 
 
-def get_api_key() -> str | None:
+PROVIDERS = {
+    "claude": {"label": "Anthropic API key", "env": "ANTHROPIC_API_KEY", "word": "anthropic", "prefix": "sk-ant-",
+               "model_env": "ROUTEGUARD_MODEL", "default_model": "claude-sonnet-5-5"},
+    "crusoe": {"label": "Crusoe API key", "env": "CRUSOE_API_KEY", "word": "crusoe", "prefix": None,
+               "model_env": "CRUSOE_MODEL", "default_model": "meta-llama/Llama-3.3-70B-Instruct"},
+}
+
+
+def get_api_key(provider: str = "claude") -> str | None:
     """Server-side Anthropic key from Streamlit secrets (any casing, top level or inside a section)
     or the environment. Never displayed or logged. Callers must gate it (see sidebar)."""
+    spec = PROVIDERS[provider]
+    prefix, word, env = spec["prefix"], spec["word"], spec["env"]
+
     def clean(v: str) -> str:
         return v.strip().strip('"').strip("'").strip()
 
@@ -149,10 +160,10 @@ def get_api_key() -> str | None:
         except Exception:
             return None
         for k, v in items:
-            if isinstance(v, str) and clean(v).startswith("sk-ant-"):
+            if prefix and isinstance(v, str) and clean(v).startswith(prefix):
                 return clean(v), f"{path}{k}"
         for k, v in items:
-            if isinstance(v, str) and "anthropic" in k.lower() and "key" in k.lower():
+            if isinstance(v, str) and word in k.lower() and "key" in k.lower():
                 return clean(v), f"{path}{k}"
         for k, v in items:
             if not isinstance(v, str):
@@ -166,15 +177,15 @@ def get_api_key() -> str | None:
         found = scan(st.secrets)
     except Exception:
         pass
-    if not found and os.environ.get("ANTHROPIC_API_KEY"):
-        found = (clean(os.environ["ANTHROPIC_API_KEY"]), "env ANTHROPIC_API_KEY")
+    if not found and os.environ.get(env):
+        found = (clean(os.environ[env]), f"env {env}")
     if not found:
         st.session_state["key_diag"] = "no key in secrets or environment"
         return None
     key, where = found
     # safe diagnostic: field name, length, prefix check. Never the key itself.
-    st.session_state["key_diag"] = (f"key from '{where}', {len(key)} chars, "
-                                    f"{'starts with sk-ant-' if key.startswith('sk-ant-') else 'does NOT start with sk-ant-'}")
+    shape = "" if not prefix else (f", starts with {prefix}" if key.startswith(prefix) else f", does NOT start with {prefix}")
+    st.session_state["key_diag"] = f"key from '{where}', {len(key)} chars{shape}"
     return key
 
 
@@ -440,25 +451,28 @@ with st.sidebar:
                          help="Connected mode loads a shipper manifest and pulls intel from the sources "
                               f"configured in {SOURCES_CONFIG}.")
     connected = data_mode.startswith("Connected")
-    server_key = get_api_key()
     api_key = None
     if not connected:
         scen_key = st.radio("Scenario", list(SCENARIOS), format_func=lambda k: SCENARIOS[k]["title"], key="scenario")
         engine = st.radio(
-            "Engine", ["Replay (offline, demo-safe)", "Live (Claude API)"],
+            "Engine", ["Replay (offline, demo-safe)", "Live (Claude API)", "Live (Crusoe, open models)"],
             help="Replay streams pre-recorded agent output: identical every run, no network. "
-                 "Live calls Claude with the same prompts; if a call fails it falls back to replay.")
+                 "Live calls Claude, or open-weight models on Crusoe, with the same prompts; "
+                 "if a call fails it falls back to replay.")
     else:
         up = st.file_uploader("Shipper manifest (JSON or CSV)", type=["json", "csv"])
         sample = st.selectbox("…or use a sample manifest", list(SAMPLE_MANIFESTS), disabled=up is not None)
-        engine = "Live (Claude API)"
-        st.caption("Connected-data runs always use the Live engine.")
+        engine = st.radio("Engine", ["Live (Claude API)", "Live (Crusoe, open models)"],
+                          help="Connected-data runs always use a live model.")
         sw_key = st.text_input("Similarweb API key (optional)", type="password", value="",
                                placeholder="paste to vet party websites (session only)",
                                help="Checks the web footprint of each party website in the manifest. "
                                     "Kept only in your session, never stored.").strip().strip('"').strip("'")
+    provider = "crusoe" if "Crusoe" in engine else "claude"
+    spec = PROVIDERS[provider]
+    server_key = get_api_key(provider) if engine.startswith("Live") else None
     if engine.startswith("Live"):
-        typed = st.text_input("Anthropic API key", type="password", value="",
+        typed = st.text_input(spec["label"], type="password", value="", key=f"key_{provider}",
                               placeholder="paste your key (kept only in your session)")
         # A server-side key (Secrets / env) is private to the owner: it is only used after the
         # owner passcode is entered. On a hosted app with no passcode configured it is never used.
@@ -476,7 +490,8 @@ with st.sidebar:
             else:
                 st.caption("A saved key exists but is locked: set ROUTEGUARD_PASSCODE in Secrets to use it.")
         api_key = typed or (server_key if unlocked else None)
-        model = st.text_input("Model", value=os.environ.get("ROUTEGUARD_MODEL", "claude-sonnet-5-5"))
+        model = st.text_input("Model", value=os.environ.get(spec["model_env"], spec["default_model"]),
+                              key=f"model_{provider}")
         if unlocked and st.session_state.get("key_diag"):
             st.caption(f"🔑 owner key unlocked · {st.session_state['key_diag']}")
         elif typed:
@@ -610,7 +625,7 @@ def make_backend():
     replay = ReplayBackend(speed=speed)
     if engine.startswith("Live") and api_key:
         try:
-            return ClaudeBackend(model=model, api_key=api_key), replay
+            return make_live_backend(provider, model=model, api_key=api_key), replay
         except Exception as exc:
             st.toast(f"Live engine unavailable ({exc}); using replay.", icon="⚠️")
     return replay, replay
@@ -674,7 +689,7 @@ else:
     # ---------------------------------------------------------- live run
     if connected and not api_key:
         render_static(None)
-        st.error("Connected-data runs need the Live engine: add ANTHROPIC_API_KEY in Secrets or paste it in the sidebar.")
+        st.error("Connected-data runs need the Live engine: paste an API key for the selected engine in the sidebar.")
         st.stop()
     backend, replay = make_backend()
     history.clear()
